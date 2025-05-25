@@ -1,3 +1,7 @@
+# 🚧 Currently under development
+
+
+
 # 📸 Pashatoku
 
 **Pashatoku** is an open-source codebase for building fast, QR-based quiz platforms.
