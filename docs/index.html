@@ -1,9 +1,12 @@
 <!DOCTYPE html>
-<html lang="en" oncontextmenu="return false" ondragstart="return false" onselectstart="return false">
+<html lang="en" oncontextmenu="return false" onselectstart="return false" ondragstart="return false">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pashatoku</title>
+  <title>Pashatoku - Open Source QR-Based Quiz Platform</title>
+  <meta name="description" content="Pashatoku is an open-source project for building customizable, QR-based quiz platforms. Designed for educators, developers, and interactive competitions.">
+  <meta name="keywords" content="Pashatoku, quiz platform, open source, QR quiz, educational tool, hackathon, competition, MotoYucchi">
+  <meta name="author" content="MotoYucchi">
   <link rel="icon" type="image/png" href="favicon.png" />
   <style>
     body {
@@ -15,7 +18,7 @@
       user-select: none;
     }
     .container {
-      max-width: 800px;
+      max-width: 960px;
       margin: 40px auto;
       background: #fff;
       padding: 30px;
@@ -25,11 +28,13 @@
     h1 {
       font-size: 2.5em;
       margin-bottom: 0.5em;
+      text-align: center;
     }
     h2 {
       font-size: 1.8em;
       border-bottom: 2px solid #2C3E50;
       padding-bottom: 0.3em;
+      margin-top: 2em;
     }
     p {
       font-size: 1.1em;
@@ -38,19 +43,31 @@
     ul {
       list-style: none;
       padding-left: 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
     }
-    ul li {
-      position: relative;
-      padding-left: 30px;
-      margin-bottom: 10px;
-      font-size: 1.1em;
+    li {
+      background: #f0f0f0;
+      flex: 1 1 30%;
+      padding: 1em;
+      border-radius: 6px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
     }
-    ul li::before {
-      content: '✓';
-      color: #27ae60;
-      font-weight: bold;
-      position: absolute;
-      left: 0;
+    .btn {
+      display: inline-block;
+      padding: 0.6em 1.2em;
+      background: #2c3e50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      text-decoration: none;
+      margin: 1em 0.5em;
+    }
+    .btn-outline {
+      background: transparent;
+      color: #2c3e50;
+      border: 2px solid #2c3e50;
     }
     .note {
       background: #ecf0f1;
@@ -60,9 +77,9 @@
     }
     footer {
       text-align: center;
-      color: #999;
-      margin-top: 40px;
       font-size: 0.9em;
+      color: #777;
+      margin-top: 40px;
     }
     a {
       color: #3498db;
@@ -72,37 +89,43 @@
       text-decoration: underline;
     }
   </style>
-  <script>
-    // 右クリックメニューの無効化
-    document.addEventListener('contextmenu', event => event.preventDefault());
-    // 画像ドラッグ防止
-    document.addEventListener('dragstart', event => event.preventDefault());
-  </script>
 </head>
 <body>
   <div class="container">
     <h1>📸 Pashatoku</h1>
-    <p>
-      Snap a QR code. Solve with rhythm.<br />
-      <strong>Pashatoku</strong> is a fast-paced, fun quiz web app powered by open source.
+    <p style="text-align: center;">
+      <strong>Pashatoku</strong> is an open-source codebase for building fast, QR-based quiz platforms.<br />
+      It is <strong>not</strong> a hosted quiz service, but a foundation you can freely modify and deploy.
     </p>
+
+    <p style="text-align: center; color: #555;">
+      Perfect for educational institutions, hackathons, classroom tools, and interactive competitions. Designed with performance and user engagement in mind.
+    </p>
+
+    <div style="text-align: center;">
+      <a class="btn" href="#setup">⚡ Get Started</a>
+      <a class="btn btn-outline" href="https://github.com/MotoYucchi/pashatoku.com" target="_blank">🔗 GitHub</a>
+    </div>
 
     <h2>✨ Features</h2>
     <ul>
-      <li>Instant QR scanning with 3-digit quiz codes</li>
-      <li>Rhythm-focused UI for fast solving</li>
-      <li>Fun sound effects and animations</li>
+      <li><strong>📷 QR-Based Input</strong><br />Scan 3-digit codes via QR to register problems effortlessly. Great for physical events and timed activities.</li>
+      <li><strong>⚡ Fast Quiz Experience</strong><br />Designed for speed and rhythm — perfect for dynamic quiz solving and real-time scoring.</li>
+      <li><strong>🛠️ Open and Customizable</strong><br />Licensed under LGPL-3.0. You can adapt it for web, mobile, or local deployments without restriction.</li>
     </ul>
 
-    <h2>📦 Installation & Setup</h2>
+    <h2 id="setup">📦 Installation & Setup</h2>
     <p>
-      Follow the instructions in the README file.<br />
-      Pashatoku is licensed under <strong>LGPL-3.0</strong>.
+      This repository contains only the code. Pashatoku must be hosted by you or integrated into your own system.<br />
+      It is ideal for developers who want to build their own quiz-based learning, competition, or event platform.
     </p>
+    <div style="text-align: center;">
+      <a class="btn" href="https://github.com/MotoYucchi/pashatoku.com" target="_blank">📖 View Setup Guide</a>
+    </div>
 
     <div class="note">
-      <strong>Note:</strong> I cannot offer direct support.  
-      Instead, I’ve prepared clear usage instructions so anyone can enjoy using this app.
+      <strong>Note:</strong> Pashatoku does <u>not</u> host or operate any quiz service.<br />
+      This is only the codebase to create your own QR-based quiz platform.
     </div>
 
     <footer>
