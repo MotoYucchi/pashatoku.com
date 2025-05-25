@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" oncontextmenu="return false" ondragstart="return false" onselectstart="return false">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -12,6 +12,7 @@
       color: #333;
       margin: 0;
       padding: 0;
+      user-select: none;
     }
     .container {
       max-width: 800px;
@@ -63,19 +64,28 @@
       margin-top: 40px;
       font-size: 0.9em;
     }
-    .logo {
-      max-width: 120px;
-      border-radius: 50%;
-      margin-bottom: 1rem;
+    a {
+      color: #3498db;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
     }
   </style>
+  <script>
+    // 右クリックメニューの無効化
+    document.addEventListener('contextmenu', event => event.preventDefault());
+    // 画像ドラッグ防止
+    document.addEventListener('dragstart', event => event.preventDefault());
+  </script>
 </head>
 <body>
   <div class="container">
-    <img src="favicon.png" alt="Pashatoku icon" class="logo" />
     <h1>📸 Pashatoku</h1>
-    <p>Snap a QR code. Solve with rhythm.<br />
-    <strong>Pashatoku</strong> is a fast-paced, fun quiz web app powered by open source.</p>
+    <p>
+      Snap a QR code. Solve with rhythm.<br />
+      <strong>Pashatoku</strong> is a fast-paced, fun quiz web app powered by open source.
+    </p>
 
     <h2>✨ Features</h2>
     <ul>
@@ -85,7 +95,10 @@
     </ul>
 
     <h2>📦 Installation & Setup</h2>
-    <p>Follow the instructions in the README file. Pashatoku is licensed under LGPL-3.0.</p>
+    <p>
+      Follow the instructions in the README file.<br />
+      Pashatoku is licensed under <strong>LGPL-3.0</strong>.
+    </p>
 
     <div class="note">
       <strong>Note:</strong> I cannot offer direct support.  
@@ -93,6 +106,8 @@
     </div>
 
     <footer>
+      Created by <strong>MotoYucchi</strong><br />
+      <a href="https://github.com/MotoYucchi/pashatoku.com" target="_blank">View on GitHub</a><br />
       © 2025 Pashatoku OSS. Licensed under LGPL-3.0.
     </footer>
   </div>
