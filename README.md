@@ -1,5 +1,7 @@
 # 🚧 Currently under development
-
+> **⚠️ WARNING: Under Active Development / Not Functional**
+> 現在開発中です。まだまともに動作する状態ではありません。
+> 予告なくコードの完全なリセットが行われる可能性があります。
 
 
 # 📸 Pashatoku
@@ -25,13 +27,14 @@ This repository provides **only** the source code.
 To use it:
 
 1. Clone this repository
-2. Deploy it to GitHub Pages or your own web server
+2. Deploy it to your own web server
 3. Edit the quiz contents and code as needed
 
 ```bash
 git clone https://github.com/MotoYucchi/pashatoku.com
-cd pashatoku.com
-# Open index.html directly, or serve with your favorite static server
+cd pashatoku.com/app
+docker-compose up -build
+# Serve with your favorite dynamic server
 ````
 
 ---
@@ -77,13 +80,14 @@ This is a development template for building your own self-hosted solution.
 使用方法：
 
 1. リポジトリをクローン
-2. GitHub Pages または自前サーバーでホスト
+2. 自前サーバーでホスト
 3. 必要に応じてコードや問題内容を編集
 
 ```bash
 git clone https://github.com/MotoYucchi/pashatoku.com
-cd pashatoku.com
-# index.html を直接開くか、静的サーバーで配信
+cd pashatoku.com/app
+docker-compose up -build
+# 動的サーバーで配信
 ```
 
 ---

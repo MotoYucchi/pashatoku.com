@@ -1,0 +1,84 @@
+services:
+  # 1. Databases (PostgreSQL: Ports 5432)
+  # --- Quiz DataBase ---
+  quiz-db:
+    image: postgres:17-alpine
+    container_name: pashatoku-quiz-db
+    environment:
+      POSTGRES_DB: quiz_content
+      POSTGRES_USER: quiz_admin
+      POSTGRES_PASSWORD: quiz_password
+    volumes:
+      - ./data/quiz_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quiz_admin -d quiz_content"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # --- User DataBase ---
+  user-db:
+    image: postgres:17-alpine
+    container_name: pashatoku-user-db
+    environment:
+      POSTGRES_DB: user_personal_data
+      POSTGRES_USER: user_admin
+      POSTGRES_PASSWORD: user_password
+    volumes:
+      - ./data/user_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user_admin -d user_personal_data"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Backend API (Go: Port 8080)
+  backend:
+    build: ./backend
+    container_name: pashatoku-backend
+    ports:
+      - "8080:8080"
+    environment:
+      QUIZ_DB_URL: "postgres://quiz_admin:quiz_password@quiz-db:5432/quiz_content?sslmode=disable"
+      USER_DB_URL: "postgres://user_admin:user_password@user-db:5432/user_personal_data?sslmode=disable"
+    depends_on:
+      quiz-db:
+        condition: service_healthy
+      user-db:
+        condition: service_healthy
+
+  # 3. Admin Panel (Directus: Port 8055)
+  admin:
+    image: directus/directus:latest
+    container_name: pashatoku-admin
+    ports:
+      - "8055:8055"
+    environment:
+      KEY: "pashatoku-secret-key"
+      SECRET: "8055805580558055"
+      ADMIN_EMAIL: "admin@pashatoku.com"
+      ADMIN_PASSWORD: "80558055"
+      DB_CLIENT: "pg"
+      DB_HOST: "quiz-db"
+      DB_PORT: "5432"
+      DB_DATABASE: "quiz_content"
+      DB_USER: "quiz_admin"
+      DB_PASSWORD: "quiz_password"
+      AUTH_PROVIDERS: "static"
+    depends_on:
+      quiz-db:
+        condition: service_healthy
+      user-db:
+        condition: service_healthy
+
+  # 4. Frontend (React + Vite: Port 3000)
+  frontend:
+    build: ./frontend
+    container_name: pashatoku-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
