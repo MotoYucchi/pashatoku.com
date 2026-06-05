@@ -1,138 +1,328 @@
 <!DOCTYPE html>
-<html lang="en" oncontextmenu="return false" onselectstart="return false" ondragstart="return false">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pashatoku - Open Source QR-Based Quiz Platform</title>
+  <title>Pashatoku - Interactive QR-Based Quiz Platform</title>
   <meta name="description" content="Pashatoku is an open-source project for building customizable, QR-based quiz platforms. Designed for educators, developers, and interactive competitions.">
-  <meta name="keywords" content="Pashatoku, quiz platform, open source, QR quiz, educational tool, hackathon, competition, MotoYucchi">
-  <meta name="author" content="MotoYucchi">
   <link rel="icon" type="image/png" href="favicon.png" />
   <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --secondary: #10b981;
+      --dark: #0f172a;
+      --dark-card: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --bg: #020617;
+      --border: #334155;
+    }
+
+    * { box-sizing: border-box; }
+    
     body {
-      background: #f9f9f9;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      color: #333;
       margin: 0;
-      padding: 0;
-      user-select: none;
-    }
-    .container {
-      max-width: 960px;
-      margin: 40px auto;
-      background: #fff;
-      padding: 30px;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-      border-radius: 8px;
-    }
-    h1 {
-      font-size: 2.5em;
-      margin-bottom: 0.5em;
-      text-align: center;
-    }
-    h2 {
-      font-size: 1.8em;
-      border-bottom: 2px solid #2C3E50;
-      padding-bottom: 0.3em;
-      margin-top: 2em;
-    }
-    p {
-      font-size: 1.1em;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
       line-height: 1.6;
     }
-    ul {
-      list-style: none;
-      padding-left: 0;
+
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0; width: 100%;
+      background: rgba(2, 6, 23, 0.85);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      z-index: 100;
       display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 2rem;
     }
-    li {
-      background: #f0f0f0;
-      flex: 1 1 30%;
-      padding: 1em;
-      border-radius: 6px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    .nav-brand { font-size: 1.5rem; font-weight: 900; background: linear-gradient(to right, #60a5fa, #34d399); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-decoration: none; }
+    .nav-links { display: flex; gap: 1.5rem; align-items: center; }
+    .nav-links a { color: var(--text); text-decoration: none; font-weight: 600; transition: color 0.2s; }
+    .nav-links a:hover { color: #60a5fa; }
+    .lang-select {
+      background: var(--dark-card); color: var(--text);
+      border: 1px solid var(--border); padding: 0.5rem;
+      border-radius: 6px; font-weight: bold; cursor: pointer;
     }
+
+    /* Layout */
+    .container { max-width: 1000px; margin: 0 auto; padding: 6rem 2rem 4rem 2rem; }
+    section { margin-bottom: 5rem; }
+    
+    h1 { font-size: 3rem; font-weight: 900; text-align: center; margin-bottom: 1rem; line-height: 1.2; }
+    h2 { font-size: 2rem; font-weight: 800; border-bottom: 2px solid var(--border); padding-bottom: 0.5rem; margin-top: 0; margin-bottom: 1.5rem; color: #38bdf8; }
+    h3 { font-size: 1.5rem; color: #60a5fa; margin-top: 2rem; }
+    p { color: var(--text-muted); font-size: 1.1rem; }
+    
+    .hero { text-align: center; margin-bottom: 5rem; padding: 2rem 0; }
+    .hero p { max-width: 600px; margin: 0 auto 2rem auto; font-size: 1.25rem; }
+    
     .btn {
-      display: inline-block;
-      padding: 0.6em 1.2em;
-      background: #2c3e50;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      text-decoration: none;
-      margin: 1em 0.5em;
+      display: inline-block; padding: 0.75rem 1.5rem; background: var(--primary);
+      color: #fff; text-decoration: none; border-radius: 8px; font-weight: bold;
+      transition: background 0.2s;
     }
-    .btn-outline {
-      background: transparent;
-      color: #2c3e50;
-      border: 2px solid #2c3e50;
+    .btn:hover { background: var(--primary-hover); }
+    .btn-secondary { background: var(--dark-card); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: #334155; }
+
+    /* Cards */
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
+    .card {
+      background: var(--dark-card); border: 1px solid var(--border);
+      padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
     }
-    .note {
-      background: #ecf0f1;
-      border-left: 5px solid #3498db;
-      padding: 15px;
-      margin-top: 30px;
-    }
-    footer {
-      text-align: center;
-      font-size: 0.9em;
-      color: #777;
-      margin-top: 40px;
-    }
-    a {
-      color: #3498db;
-      text-decoration: none;
-    }
-    a:hover {
-      text-decoration: underline;
+    .card h4 { margin-top: 0; font-size: 1.25rem; color: #f8fafc; }
+    
+    /* FAQ/Help */
+    .faq-item { margin-bottom: 1.5rem; background: var(--dark-card); padding: 1rem 1.5rem; border-radius: 8px; border-left: 4px solid var(--secondary); }
+    .faq-q { font-weight: bold; font-size: 1.1rem; margin: 0 0 0.5rem 0; color: #f8fafc; }
+    .faq-a { margin: 0; color: var(--text-muted); }
+
+    footer { text-align: center; padding: 2rem; color: var(--text-muted); border-top: 1px solid var(--border); margin-top: 4rem; }
+    
+    @media (max-width: 768px) {
+      .nav-links { display: none; } /* Simplified mobile nav for now, just show language */
+      .nav-links.mobile { display: flex; gap: 0.5rem; }
+      h1 { font-size: 2.2rem; }
+      .container { padding-top: 5rem; }
     }
   </style>
 </head>
 <body>
+
+  <nav>
+    <a href="#" class="nav-brand">Pashatoku</a>
+    <div class="nav-links">
+      <a href="#about" data-i18n="nav_about">About</a>
+      <a href="#howto" data-i18n="nav_howto">How To</a>
+      <a href="#help" data-i18n="nav_help">Help</a>
+    </div>
+    <select id="languageSelect" class="lang-select" onchange="changeLanguage(this.value)">
+      <option value="en">English</option>
+      <option value="ja">日本語</option>
+    </select>
+  </nav>
+
   <div class="container">
-    <h1>📸 Pashatoku</h1>
-    <p style="text-align: center;">
-      <strong>Pashatoku</strong> is an open-source codebase for building fast, QR-based quiz platforms.<br />
-      It is <strong>not</strong> a hosted quiz service, but a foundation you can freely modify and deploy.
-    </p>
+    <section class="hero">
+      <h1 data-i18n="hero_title">Interactive QR Quiz Platform</h1>
+      <p data-i18n="hero_desc">An open-source, fast, and customizable system designed for real-world events, educational use, and interactive competitions.</p>
+      <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+        <a href="#howto" class="btn" data-i18n="hero_btn_start">Get Started</a>
+        <a href="https://github.com/MotoYucchi/pashatoku.com" target="_blank" class="btn btn-secondary" data-i18n="hero_btn_github">View on GitHub</a>
+      </div>
+    </section>
 
-    <p style="text-align: center; color: #555;">
-      Perfect for educational institutions, hackathons, classroom tools, and interactive competitions. Designed with performance and user engagement in mind.
-    </p>
+    <section id="about">
+      <h2 data-i18n="about_title">What is Pashatoku?</h2>
+      <p data-i18n="about_p1">Pashatoku is a self-hosted, open-source codebase for creating your own QR-based quiz events. It does not provide a centralized hosted service, meaning you retain full control over your data, UI, and deployment.</p>
+      
+      <div class="card-grid" style="margin-top: 2rem;">
+        <div class="card">
+          <h4 data-i18n="about_card1_title">📷 QR Code Integration</h4>
+          <p data-i18n="about_card1_desc">Participants can simply scan a QR code at physical locations to instantly open a question. No app installation required.</p>
+        </div>
+        <div class="card">
+          <h4 data-i18n="about_card2_title">⏱️ Real-time Synchronization</h4>
+          <p data-i18n="about_card2_desc">Features live timers, global forced-end events, and real-time dashboard updates via modern web technologies.</p>
+        </div>
+        <div class="card">
+          <h4 data-i18n="about_card3_title">🛠️ Fully Open Source</h4>
+          <p data-i18n="about_card3_desc">Built with Go (Backend) and React/Vite (Frontend). You can customize everything to fit your hackathon or classroom.</p>
+        </div>
+      </div>
+    </section>
 
-    <div style="text-align: center;">
-      <a class="btn" href="#setup">⚡ Get Started</a>
-      <a class="btn btn-outline" href="https://github.com/MotoYucchi/pashatoku.com" target="_blank">🔗 GitHub</a>
-    </div>
+    <section id="howto">
+      <h2 data-i18n="howto_title">How to Use</h2>
+      
+      <h3 data-i18n="howto_org_title">For Organizers</h3>
+      <div class="card-grid">
+        <div class="card">
+          <h4 data-i18n="howto_org_step1_title">1. Setup Server</h4>
+          <p data-i18n="howto_org_step1_desc">Clone the repository and run `docker compose up -d` to start the PostgreSQL databases, Go backend, and React frontend.</p>
+        </div>
+        <div class="card">
+          <h4 data-i18n="howto_org_step2_title">2. Create Events</h4>
+          <p data-i18n="howto_org_step2_desc">Access the Admin Dashboard to create quiz events, add questions, set time limits, and generate QR codes for each question.</p>
+        </div>
+        <div class="card">
+          <h4 data-i18n="howto_org_step3_title">3. Manage Live</h4>
+          <p data-i18n="howto_org_step3_desc">Change quiz statuses (Waiting -> Started -> Ended), monitor participant scores, or trigger a global countdown timer.</p>
+        </div>
+      </div>
 
-    <h2>✨ Features</h2>
-    <ul>
-      <li><strong>📷 QR-Based Input</strong><br />Scan 3-digit codes via QR to register problems effortlessly. Great for physical events and timed activities.</li>
-      <li><strong>⚡ Fast Quiz Experience</strong><br />Designed for speed and rhythm — perfect for dynamic quiz solving and real-time scoring.</li>
-      <li><strong>🛠️ Open and Customizable</strong><br />Licensed under LGPL-3.0. You can adapt it for web, mobile, or local deployments without restriction.</li>
-    </ul>
+      <h3 data-i18n="howto_part_title">For Participants</h3>
+      <div class="card-grid">
+        <div class="card">
+          <h4 data-i18n="howto_part_step1_title">1. Register</h4>
+          <p data-i18n="howto_part_step1_desc">Access the main URL, enter your name and student/employee ID to join the system.</p>
+        </div>
+        <div class="card">
+          <h4 data-i18n="howto_part_step2_title">2. Scan & Answer</h4>
+          <p data-i18n="howto_part_step2_desc">Scan the event's QR codes using your device's camera to load specific questions. Submit answers to earn points.</p>
+        </div>
+        <div class="card">
+          <h4 data-i18n="howto_part_step3_title">3. View History</h4>
+          <p data-i18n="howto_part_step3_desc">Track your progress and total score across different quiz events from the 'History / Results' tab.</p>
+        </div>
+      </div>
+    </section>
 
-    <h2 id="setup">📦 Installation & Setup</h2>
-    <p>
-      This repository contains only the code. Pashatoku must be hosted by you or integrated into your own system.<br />
-      It is ideal for developers who want to build their own quiz-based learning, competition, or event platform.
-    </p>
-    <div style="text-align: center;">
-      <a class="btn" href="https://github.com/MotoYucchi/pashatoku.com" target="_blank">📖 View Setup Guide</a>
-    </div>
+    <section id="help">
+      <h2 data-i18n="help_title">Help & Troubleshooting</h2>
+      
+      <div class="faq-item">
+        <p class="faq-q" data-i18n="help_q1">Q. The camera won't open for scanning QR codes.</p>
+        <p class="faq-a" data-i18n="help_a1">A. Make sure you have granted camera permissions to your browser. Also, note that most mobile browsers require the site to be served over HTTPS (or localhost) for camera access to work.</p>
+      </div>
+      
+      <div class="faq-item">
+        <p class="faq-q" data-i18n="help_q2">Q. Why do I see a "GPS Verification Failed" error?</p>
+        <p class="faq-a" data-i18n="help_a2">A. If the organizer enabled GPS restrictions for a question, you must be physically near the designated coordinates. Ensure Location Services are turned on for your browser.</p>
+      </div>
 
-    <div class="note">
-      <strong>Note:</strong> Pashatoku does <u>not</u> host or operate any quiz service.<br />
-      This is only the codebase to create your own QR-based quiz platform.
-    </div>
+      <div class="faq-item">
+        <p class="faq-q" data-i18n="help_q3">Q. I answered a question but it says "Event Closed".</p>
+        <p class="faq-a" data-i18n="help_a3">A. The organizer has manually closed the event, or the global timer has expired. Answers can no longer be submitted.</p>
+      </div>
+      
+      <div class="faq-item">
+        <p class="faq-q" data-i18n="help_q4">Q. Can I use Pashatoku as a cloud service?</p>
+        <p class="faq-a" data-i18n="help_a4">A. No, Pashatoku is self-hosted software. You must deploy it on your own server or local network.</p>
+      </div>
+    </section>
 
     <footer>
-      Created by <strong>MotoYucchi</strong><br />
-      <a href="https://github.com/MotoYucchi/pashatoku.com" target="_blank">View on GitHub</a><br />
-      © 2025 Pashatoku OSS. Licensed under LGPL-3.0.
+      <p>Created by MotoYucchi. © 2025 Pashatoku OSS. Licensed under LGPL-3.0.</p>
     </footer>
   </div>
+
+  <script>
+    const translations = {
+      en: {
+        nav_about: "About",
+        nav_howto: "How To",
+        nav_help: "Help",
+        hero_title: "Interactive QR Quiz Platform",
+        hero_desc: "An open-source, fast, and customizable system designed for real-world events, educational use, and interactive competitions.",
+        hero_btn_start: "Get Started",
+        hero_btn_github: "View on GitHub",
+        about_title: "What is Pashatoku?",
+        about_p1: "Pashatoku is a self-hosted, open-source codebase for creating your own QR-based quiz events. It does not provide a centralized hosted service, meaning you retain full control over your data, UI, and deployment.",
+        about_card1_title: "📷 QR Code Integration",
+        about_card1_desc: "Participants can simply scan a QR code at physical locations to instantly open a question. No app installation required.",
+        about_card2_title: "⏱️ Real-time Synchronization",
+        about_card2_desc: "Features live timers, global forced-end events, and real-time dashboard updates via modern web technologies.",
+        about_card3_title: "🛠️ Fully Open Source",
+        about_card3_desc: "Built with Go (Backend) and React/Vite (Frontend). You can customize everything to fit your hackathon or classroom.",
+        howto_title: "How to Use",
+        howto_org_title: "For Organizers",
+        howto_org_step1_title: "1. Setup Server",
+        howto_org_step1_desc: "Clone the repository and run `docker compose up -d` to start the PostgreSQL databases, Go backend, and React frontend.",
+        howto_org_step2_title: "2. Create Events",
+        howto_org_step2_desc: "Access the Admin Dashboard to create quiz events, add questions, set time limits, and generate QR codes for each question.",
+        howto_org_step3_title: "3. Manage Live",
+        howto_org_step3_desc: "Change quiz statuses (Waiting -> Started -> Ended), monitor participant scores, or trigger a global countdown timer.",
+        howto_part_title: "For Participants",
+        howto_part_step1_title: "1. Register",
+        howto_part_step1_desc: "Access the main URL, enter your name and student/employee ID to join the system.",
+        howto_part_step2_title: "2. Scan & Answer",
+        howto_part_step2_desc: "Scan the event's QR codes using your device's camera to load specific questions. Submit answers to earn points.",
+        howto_part_step3_title: "3. View History",
+        howto_part_step3_desc: "Track your progress and total score across different quiz events from the 'History / Results' tab.",
+        help_title: "Help & Troubleshooting",
+        help_q1: "Q. The camera won't open for scanning QR codes.",
+        help_a1: "A. Make sure you have granted camera permissions to your browser. Also, note that most mobile browsers require the site to be served over HTTPS (or localhost) for camera access to work.",
+        help_q2: "Q. Why do I see a 'GPS Verification Failed' error?",
+        help_a2: "A. If the organizer enabled GPS restrictions for a question, you must be physically near the designated coordinates. Ensure Location Services are turned on for your browser.",
+        help_q3: "Q. I answered a question but it says 'Event Closed'.",
+        help_a3: "A. The organizer has manually closed the event, or the global timer has expired. Answers can no longer be submitted.",
+        help_q4: "Q. Can I use Pashatoku as a cloud service?",
+        help_a4: "A. No, Pashatoku is self-hosted software. You must deploy it on your own server or local network."
+      },
+      ja: {
+        nav_about: "概要",
+        nav_howto: "使い方",
+        nav_help: "ヘルプ",
+        hero_title: "インタラクティブ QRクイズシステム",
+        hero_desc: "リアルイベント、教育現場、競技向けに設計された、高速でカスタマイズ可能なオープンソースのクイズプラットフォームです。",
+        hero_btn_start: "使い方を見る",
+        hero_btn_github: "GitHubで見る",
+        about_title: "Pashatokuとは？",
+        about_p1: "Pashatokuは、QRコードを利用したクイズイベントを独自に構築できる、セルフホスト型のオープンソースコードベースです。クラウドサービスとしての提供ではないため、データやUI、サーバー環境をすべて自由に管理できます。",
+        about_card1_title: "📷 QRコード連動",
+        about_card1_desc: "参加者は会場に設置されたQRコードを読み取るだけで、即座に問題画面へアクセスできます。専用アプリのインストールは不要です。",
+        about_card2_title: "⏱️ リアルタイム同期",
+        about_card2_desc: "イベントごとの制限時間や、システム全体の強制終了タイマー、ダッシュボードでのリアルタイムなスコア集計機能を備えています。",
+        about_card3_title: "🛠️ 完全オープンソース",
+        about_card3_desc: "バックエンドはGo、フロントエンドはReact(Vite)で構築。ハッカソンや学校行事など、用途に合わせて自由にカスタマイズ可能です。",
+        howto_title: "使い方",
+        howto_org_title: "開催者（管理者）向け",
+        howto_org_step1_title: "1. サーバーの立ち上げ",
+        howto_org_step1_desc: "リポジトリをクローンし、`docker compose up -d` を実行するだけで、DB・バックエンド・フロントエンドが一括起動します。",
+        howto_org_step2_title: "2. イベント作成",
+        howto_org_step2_desc: "Admin Dashboardからクイズイベントを作成し、問題の登録、制限時間の設定、各問題のQRコード生成を行います。",
+        howto_org_step3_title: "3. リアルタイム管理",
+        howto_org_step3_desc: "イベントの状態（待機中→開催中→終了）を切り替えたり、参加者のスコアを監視したり、全体タイマーを発動したりできます。",
+        howto_part_title: "参加者向け",
+        howto_part_step1_title: "1. ユーザー登録",
+        howto_part_step1_desc: "ホストされたURLにアクセスし、名前と学籍番号（または社員番号）を入力してシステムにエントリーします。",
+        howto_part_step2_title: "2. スキャンと回答",
+        howto_part_step2_desc: "スマホのカメラで会場のQRコードをスキャンし、表示された問題に回答してポイントを獲得します。",
+        howto_part_step3_title: "3. 履歴・結果の確認",
+        howto_part_step3_desc: "「履歴・結果」タブから、自分が参加したイベントの進行状況や獲得スコアをいつでも確認できます。",
+        help_title: "ヘルプ・よくある質問",
+        help_q1: "Q. QRコード読み取りのカメラが起動しません。",
+        help_a1: "A. ブラウザにカメラへのアクセス許可を与えているか確認してください。また、スマホブラウザの仕様上、通信がHTTPS（またはlocalhost）でないとカメラ機能は動作しません。",
+        help_q2: "Q. 「GPS認証に失敗しました」というエラーが出ます。",
+        help_a2: "A. 開催者がGPS制限を設定している問題です。指定された場所の近くに移動し、ブラウザの位置情報サービス（GPS）がオンになっていることを確認してください。",
+        help_q3: "Q. 回答しようとしたら「イベントは終了しました」と表示されます。",
+        help_a3: "A. 開催者がイベントを終了させたか、全体タイマーの時間がゼロになったため、新規の回答受付が締め切られました。",
+        help_q4: "Q. Pashatokuのクラウド版サービスはありますか？",
+        help_a4: "A. いいえ、Pashatokuはセルフホスト型のソフトウェアです。ご自身のサーバーやローカルネットワーク上に構築してご利用ください。"
+      }
+    };
+
+    function applyLanguage(lang) {
+      document.documentElement.lang = lang;
+      document.getElementById('languageSelect').value = lang;
+      
+      const elements = document.querySelectorAll('[data-i18n]');
+      elements.forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (translations[lang] && translations[lang][key]) {
+          el.innerText = translations[lang][key];
+        }
+      });
+      
+      localStorage.setItem('pashatoku_docs_lang', lang);
+    }
+
+    function changeLanguage(lang) {
+      applyLanguage(lang);
+    }
+
+    // Initialization
+    window.addEventListener('DOMContentLoaded', () => {
+      let lang = localStorage.getItem('pashatoku_docs_lang');
+      
+      if (!lang) {
+        // Auto-detect browser language
+        const browserLang = navigator.language || navigator.userLanguage;
+        lang = browserLang.startsWith('ja') ? 'ja' : 'en';
+      }
+      
+      applyLanguage(lang);
+    });
+  </script>
 </body>
 </html>
