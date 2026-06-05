@@ -27,6 +27,9 @@ function App() {
   const [userId, setUserId] = useState(null)
   
   const [isRegistered, setIsRegistered] = useState(false)
+    const [viewMode, setViewMode] = useState('quiz'); // 'quiz' or 'history'
+  const [answeredQuestionIds, setAnsweredQuestionIds] = useState([]);
+  const [historyData, setHistoryData] = useState([]);
   const [error, setError] = useState('')
   const [quizCode, setQuizCode] = useState(null)
   
@@ -69,8 +72,25 @@ function App() {
       setTosAgreed(true);
       setHostTosAgreed(true);
       setIsRegistered(true);
+      fetchAnsweredQuestions(parseInt(savedUserId));
     }
   }, []);
+
+  const fetchAnsweredQuestions = async (uid) => {
+    try {
+      const res = await axios.get(`http://localhost:8080/api/user/${uid}/answered`);
+      setAnsweredQuestionIds(res.data || []);
+    } catch (e) {}
+  };
+
+  const fetchHistory = async () => {
+    if (!userId) return;
+    try {
+      const res = await axios.get(`http://localhost:8080/api/user/${userId}/history`);
+      setHistoryData(res.data || []);
+    } catch (e) {}
+  };
+
 
   useEffect(() => {
     if (isRegistered && !quizCode && !quizData) {
@@ -144,6 +164,7 @@ function App() {
       
       setUserId(res.data.id);
       setIsRegistered(true);
+      fetchAnsweredQuestions(res.data.id);
     } catch (err) {
       setError(err.response?.data || '登録に失敗しました。');
     }
@@ -244,9 +265,13 @@ function App() {
       setExplanation(res.data.explanation);
       setScore(prev => prev + res.data.points_awarded);
       setShowAnswer(true);
-
+      setAnsweredQuestionIds(prev => [...prev, quizData.questions[currentQIndex].id]);
     } catch (err) {
-      setError('通信エラーが発生しました。');
+      if (err.response && err.response.status === 409) {
+          setError('この問題は既に回答済みです。');
+      } else {
+          setError('通信エラーが発生しました。');
+      }
     }
   };
 

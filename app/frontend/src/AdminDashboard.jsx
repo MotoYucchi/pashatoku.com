@@ -10,6 +10,7 @@ function AdminDashboard() {
   const [selectedQuiz, setSelectedQuiz] = useState(null);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [now, setNow] = useState(new Date());
   
   const [sortField, setSortField] = useState('total_score');
   const [sortOrder, setSortOrder] = useState('desc'); // 'asc' or 'desc'
@@ -18,6 +19,8 @@ function AdminDashboard() {
     if (isAuthenticated) {
       fetchQuizzes();
     }
+    const int = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(int);
   }, [isAuthenticated]);
 
   const fetchQuizzes = async () => {
@@ -151,6 +154,23 @@ function AdminDashboard() {
                       {/* 進行状態 */}
                       <div className="flex justify-between items-center">
                         <span className="text-sm font-bold text-slate-400">2. クイズ進行</span>
+                        {quiz.play_status === 'started' && quiz.timer_end_at && (
+                          <div className="text-sm font-bold bg-slate-900 px-3 py-1 rounded-md border border-slate-700">
+                            ⏳ 残り: {(() => {
+                              const end = new Date(quiz.timer_end_at);
+                              const diff = Math.floor((end - now) / 1000);
+                              if (diff <= 0) return <span className="text-red-400">時間切れ</span>;
+                              const d = Math.floor(diff / 86400);
+                              const h = Math.floor((diff % 86400) / 3600);
+                              const m = Math.floor((diff % 3600) / 60);
+                              const s = diff % 60;
+                              let str = '';
+                              if (d > 0) str += `${d}日 `;
+                              str += `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                              return <span className="text-emerald-400">{str}</span>;
+                            })()}
+                          </div>
+                        )}
                         <div className="flex bg-slate-800 rounded-lg p-1 border border-slate-700">
                           <button 
                             onClick={() => updateQuizStatus(quiz.id, 'play_status', 'waiting')}

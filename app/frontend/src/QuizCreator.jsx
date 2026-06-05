@@ -12,6 +12,11 @@ function QuizCreator() {
   const [mode, setMode] = useState('normal'); 
   const [style, setStyle] = useState('free'); 
   
+  const [timerDays, setTimerDays] = useState(0);
+  const [timerHours, setTimerHours] = useState(0);
+  const [timerMinutes, setTimerMinutes] = useState(0);
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  
   const [questions, setQuestions] = useState([
     { 
       code: '',
@@ -47,6 +52,16 @@ function QuizCreator() {
           setCustomCode(qz.code);
           setMode(qz.mode);
           setStyle(qz.style);
+          if (qz.timer_duration_sec) {
+            const d = Math.floor(qz.timer_duration_sec / 86400);
+            const h = Math.floor((qz.timer_duration_sec % 86400) / 3600);
+            const m = Math.floor((qz.timer_duration_sec % 3600) / 60);
+            const s = qz.timer_duration_sec % 60;
+            setTimerDays(d);
+            setTimerHours(h);
+            setTimerMinutes(m);
+            setTimerSeconds(s);
+          }
           if (qz.questions && qz.questions.length > 0) {
             setQuestions(qz.questions.map(q => ({
               ...q,
@@ -132,10 +147,20 @@ function QuizCreator() {
     }
 
     try {
+      let timerDurationSec = null;
+      const totalSec = (parseInt(timerDays) || 0) * 86400 + 
+                       (parseInt(timerHours) || 0) * 3600 + 
+                       (parseInt(timerMinutes) || 0) * 60 + 
+                       (parseInt(timerSeconds) || 0);
+      if (totalSec > 0) {
+          timerDurationSec = Math.min(totalSec, 8035200); // Max 93 days
+      }
+
       const payload = {
         title,
         mode,
         style,
+        timer_duration_sec: timerDurationSec,
         questions: questions.map(q => {
           const formattedQ = {
             ...q,
@@ -274,6 +299,29 @@ function QuizCreator() {
                   <option value="fastest">早押し (誰かが正解するとロック)</option>
                 </select>
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-slate-400 mb-2">タイマー設定 (自動終了機能)</label>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <input type="number" min="0" max="93" value={timerDays} onChange={(e) => setTimerDays(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-center" />
+                  <span className="block text-center text-xs text-slate-500 mt-1">日</span>
+                </div>
+                <div className="flex-1">
+                  <input type="number" min="0" max="23" value={timerHours} onChange={(e) => setTimerHours(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-center" />
+                  <span className="block text-center text-xs text-slate-500 mt-1">時間</span>
+                </div>
+                <div className="flex-1">
+                  <input type="number" min="0" max="59" value={timerMinutes} onChange={(e) => setTimerMinutes(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-center" />
+                  <span className="block text-center text-xs text-slate-500 mt-1">分</span>
+                </div>
+                <div className="flex-1">
+                  <input type="number" min="0" max="59" value={timerSeconds} onChange={(e) => setTimerSeconds(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-center" />
+                  <span className="block text-center text-xs text-slate-500 mt-1">秒</span>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500 mt-2">※全て0の場合はタイマーなし。最大93日まで。「開始」ボタンでカウントがスタートします。</p>
             </div>
 
             <div>

@@ -62,14 +62,16 @@ type AnswerResponse struct {
 }
 
 type Quiz struct {
-	ID         int        `json:"id"`
-	Code       string     `json:"code"`
-	Title      string     `json:"title"`
-	Mode       string     `json:"mode"`
-	Style      string     `json:"style"`
-	Visibility string     `json:"visibility"`
-	PlayStatus string     `json:"play_status"`
-	Questions  []Question `json:"questions"`
+	ID               int        `json:"id"`
+	Code             string     `json:"code"`
+	Title            string     `json:"title"`
+	Mode             string     `json:"mode"`
+	Style            string     `json:"style"`
+	Visibility       string     `json:"visibility"`
+	PlayStatus       string     `json:"play_status"`
+	TimerDurationSec *int       `json:"timer_duration_sec"`
+	TimerEndAt       *time.Time `json:"timer_end_at"`
+	Questions        []Question `json:"questions"`
 }
 
 type QuizResult struct {
@@ -100,7 +102,9 @@ func createTables(app *App) {
 		mode VARCHAR(20) DEFAULT 'normal',
 		style VARCHAR(20) DEFAULT 'free',
 		visibility VARCHAR(20) DEFAULT 'open',
-		play_status VARCHAR(20) DEFAULT 'waiting'
+		play_status VARCHAR(20) DEFAULT 'waiting',
+		timer_duration_sec INTEGER,
+		timer_end_at TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS quiz_questions (
 	    id SERIAL PRIMARY KEY,
@@ -135,6 +139,9 @@ func createTables(app *App) {
 	if _, err := app.QuizDB.Exec(quizSchema); err != nil {
 		log.Fatal("Failed to create Quiz table:", err)
 	}
+
+	app.QuizDB.Exec("ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS timer_duration_sec INTEGER;")
+	app.QuizDB.Exec("ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS timer_end_at TIMESTAMP;")
 
 	var count int
 	err := app.QuizDB.QueryRow("SELECT COUNT(*) FROM quizzes").Scan(&count)
@@ -316,6 +323,14 @@ func (app *App) createQuizHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(q)
 }
 
+func adjustQuizStatus(playStatus *string, timerEndAt *time.Time) {
+	if playStatus != nil && *playStatus == "started" && timerEndAt != nil {
+		if time.Now().After(*timerEndAt) {
+			*playStatus = "ended"
+		}
+	}
+}
+
 func (app *App) getQuizStatusHandler(w http.ResponseWriter, r *http.Request) {
     code := r.URL.Query().Get("code")
 	if code == "" {
@@ -324,8 +339,8 @@ func (app *App) getQuizStatusHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
     var q Quiz
-    err := app.QuizDB.QueryRow("SELECT id, code, visibility, play_status FROM quizzes WHERE code = $1", code).
-		Scan(&q.ID, &q.Code, &q.Visibility, &q.PlayStatus)
+    err := app.QuizDB.QueryRow("SELECT id, code, visibility, play_status, timer_end_at FROM quizzes WHERE code = $1", code).
+		Scan(&q.ID, &q.Code, &q.Visibility, &q.PlayStatus, &q.TimerEndAt)
 		
 	if err == sql.ErrNoRows {
 		// もし見つからなければ、quiz_questions.code として検索
@@ -335,8 +350,8 @@ func (app *App) getQuizStatusHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Quiz not found", http.StatusNotFound)
 			return
 		}
-		err = app.QuizDB.QueryRow("SELECT id, code, visibility, play_status FROM quizzes WHERE id = $1", quizID).
-		    Scan(&q.ID, &q.Code, &q.Visibility, &q.PlayStatus)
+		err = app.QuizDB.QueryRow("SELECT id, code, visibility, play_status, timer_end_at FROM quizzes WHERE id = $1", quizID).
+		    Scan(&q.ID, &q.Code, &q.Visibility, &q.PlayStatus, &q.TimerEndAt)
 	}
 	
 	if err != nil {
@@ -345,9 +360,11 @@ func (app *App) getQuizStatusHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	adjustQuizStatus(&q.PlayStatus, q.TimerEndAt)
+	json.NewEncoder(w).Encode(map[string]interface{}{
 	    "visibility": q.Visibility,
 	    "play_status": q.PlayStatus,
+	    "timer_end_at": q.TimerEndAt,
 	})
 }
 
@@ -361,8 +378,8 @@ func (app *App) getQuizHandler(w http.ResponseWriter, r *http.Request) {
 	var q Quiz
 	questionCodeFilter := ""
 
-	err := app.QuizDB.QueryRow("SELECT id, code, title, mode, style, visibility, play_status FROM quizzes WHERE code = $1", code).
-		Scan(&q.ID, &q.Code, &q.Title, &q.Mode, &q.Style, &q.Visibility, &q.PlayStatus)
+	err := app.QuizDB.QueryRow("SELECT id, code, title, mode, style, visibility, play_status, timer_duration_sec, timer_end_at FROM quizzes WHERE code = $1", code).
+		Scan(&q.ID, &q.Code, &q.Title, &q.Mode, &q.Style, &q.Visibility, &q.PlayStatus, &q.TimerDurationSec, &q.TimerEndAt)
 		
 	if err == sql.ErrNoRows {
 		var quizID int
@@ -371,14 +388,15 @@ func (app *App) getQuizHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Quiz or Question not found", http.StatusNotFound)
 			return
 		}
-		err = app.QuizDB.QueryRow("SELECT id, code, title, mode, style, visibility, play_status FROM quizzes WHERE id = $1", quizID).
-		    Scan(&q.ID, &q.Code, &q.Title, &q.Mode, &q.Style, &q.Visibility, &q.PlayStatus)
+		err = app.QuizDB.QueryRow("SELECT id, code, title, mode, style, visibility, play_status, timer_duration_sec, timer_end_at FROM quizzes WHERE id = $1", quizID).
+		    Scan(&q.ID, &q.Code, &q.Title, &q.Mode, &q.Style, &q.Visibility, &q.PlayStatus, &q.TimerDurationSec, &q.TimerEndAt)
 		questionCodeFilter = code
 	} else if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
 
+	adjustQuizStatus(&q.PlayStatus, q.TimerEndAt)
 	if q.Visibility == "closed" {
 		http.Error(w, "This quiz is closed", http.StatusForbidden)
 		return
@@ -430,6 +448,118 @@ func (app *App) getQuizHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(q)
 }
 
+
+func (app *App) userHistoryHandler(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+	userID := parts[3] // /api/user/{id}/history
+
+	rows, err := app.QuizDB.Query(`
+		SELECT qz.id, qz.code, qz.title, qz.play_status, qz.timer_end_at,
+		       SUM(qa.points) as total_score
+		FROM quizzes qz
+		JOIN quiz_questions qq ON qz.id = qq.quiz_id
+		JOIN quiz_answers qa ON qq.id = qa.question_id
+		WHERE qa.user_id = $1
+		GROUP BY qz.id, qz.code, qz.title, qz.play_status, qz.timer_end_at
+		ORDER BY qz.id DESC
+	`, userID)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type HistoryItem struct {
+		QuizID     int        `json:"quiz_id"`
+		Code       string     `json:"code"`
+		Title      string     `json:"title"`
+		PlayStatus string     `json:"play_status"`
+		TotalScore int        `json:"total_score"`
+		Questions  []Question `json:"questions"`
+	}
+
+	var history []HistoryItem
+	for rows.Next() {
+		var h HistoryItem
+		var timerEndAt *time.Time
+		rows.Scan(&h.QuizID, &h.Code, &h.Title, &h.PlayStatus, &timerEndAt, &h.TotalScore)
+		adjustQuizStatus(&h.PlayStatus, timerEndAt)
+		history = append(history, h)
+	}
+
+	// Fetch details if ended
+	for i, h := range history {
+		if h.PlayStatus == "ended" {
+			qRows, _ := app.QuizDB.Query(`
+				SELECT qq.id, qq.text, qq.options, qq.correct_index, qq.explanation, qa.selected_index, qa.is_correct
+				FROM quiz_questions qq
+				LEFT JOIN quiz_answers qa ON qq.id = qa.question_id AND qa.user_id = $1
+				WHERE qq.quiz_id = $2 ORDER BY qq.id
+			`, userID, h.QuizID)
+			if qRows != nil {
+				for qRows.Next() {
+					var q Question
+					var optionsJSON []byte
+					var selectedIndex sql.NullInt32
+					var isCorrect sql.NullBool
+					qRows.Scan(&q.ID, &q.Text, &optionsJSON, &q.CorrectIndex, &q.Explanation, &selectedIndex, &isCorrect)
+					json.Unmarshal(optionsJSON, &q.Options)
+					
+					// Store user answer inside the Question struct for the history view
+					// We can reuse Hint for user's selected index string, or add a field.
+					// Instead, let's just use Hint = selectedIndex
+					if selectedIndex.Valid {
+					    q.Hint = fmt.Sprintf("%d", selectedIndex.Int32)
+					} else {
+					    q.Hint = "-1"
+					}
+					
+					h.Questions = append(h.Questions, q)
+				}
+				qRows.Close()
+				history[i] = h
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(history)
+}
+
+
+func (app *App) userAnsweredHandler(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+	userID := parts[3]
+
+	rows, err := app.QuizDB.Query("SELECT question_id FROM quiz_answers WHERE user_id = $1", userID)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var answered []int
+	for rows.Next() {
+		var qid int
+		rows.Scan(&qid)
+		answered = append(answered, qid)
+	}
+	if answered == nil {
+	    answered = []int{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(answered)
+}
+
 func (app *App) answerHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -451,11 +581,12 @@ func (app *App) answerHandler(w http.ResponseWriter, r *http.Request) {
 
 	var q Question
 	var quizStyle, quizVisibility, quizPlayStatus string
+	var timerEndAt *time.Time
 	err = tx.QueryRow(`
-		SELECT q.correct_index, q.points, q.penalty_points, q.explanation, qz.style, qz.visibility, qz.play_status
+		SELECT q.correct_index, q.points, q.penalty_points, q.explanation, qz.style, qz.visibility, qz.play_status, qz.timer_end_at
 		FROM quiz_questions q 
 		JOIN quizzes qz ON q.quiz_id = qz.id 
-		WHERE q.id = $1`, req.QuestionID).Scan(&q.CorrectIndex, &q.Points, &q.PenaltyPoints, &q.Explanation, &quizStyle, &quizVisibility, &quizPlayStatus)
+		WHERE q.id = $1`, req.QuestionID).Scan(&q.CorrectIndex, &q.Points, &q.PenaltyPoints, &q.Explanation, &quizStyle, &quizVisibility, &quizPlayStatus, &timerEndAt)
 	
 	if err != nil {
 		http.Error(w, "Question not found", http.StatusNotFound)
@@ -465,8 +596,18 @@ func (app *App) answerHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Quiz is closed", http.StatusForbidden)
 		return
 	}
+	adjustQuizStatus(&quizPlayStatus, timerEndAt)
 	if quizPlayStatus != "started" {
 	    http.Error(w, "Quiz is not running", http.StatusForbidden)
+		return
+	}
+
+
+	// 重複回答チェック
+	var existingAnswer int
+	err = tx.QueryRow("SELECT id FROM quiz_answers WHERE question_id = $1 AND user_id = $2", req.QuestionID, req.UserID).Scan(&existingAnswer)
+	if err == nil {
+		http.Error(w, "Already answered", http.StatusConflict)
 		return
 	}
 
@@ -490,7 +631,16 @@ func (app *App) answerHandler(w http.ResponseWriter, r *http.Request) {
 		if req.UsedHint {
 			awardedPoints = awardedPoints / 2
 		}
-		if quizStyle == "fastest" {
+	
+	// 重複回答チェック
+	var existingAnswer int
+	err = tx.QueryRow("SELECT id FROM quiz_answers WHERE question_id = $1 AND user_id = $2", req.QuestionID, req.UserID).Scan(&existingAnswer)
+	if err == nil {
+		http.Error(w, "Already answered", http.StatusConflict)
+		return
+	}
+
+	if quizStyle == "fastest" {
 			_, err = tx.Exec("INSERT INTO quiz_locks (question_id, user_id) VALUES ($1, $2)", req.QuestionID, req.UserID)
 			if err != nil {
 				w.Header().Set("Content-Type", "application/json")
@@ -525,7 +675,7 @@ func (app *App) answerHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) adminGetQuizzesHandler(w http.ResponseWriter, r *http.Request) {
-    rows, err := app.QuizDB.Query("SELECT id, code, title, mode, style, visibility, play_status FROM quizzes ORDER BY id DESC")
+    rows, err := app.QuizDB.Query("SELECT id, code, title, mode, style, visibility, play_status, timer_duration_sec, timer_end_at FROM quizzes ORDER BY id DESC")
     if err != nil {
         http.Error(w, "Database error", http.StatusInternalServerError)
         return
@@ -535,7 +685,7 @@ func (app *App) adminGetQuizzesHandler(w http.ResponseWriter, r *http.Request) {
     quizzes := []Quiz{}
     for rows.Next() {
         var q Quiz
-        rows.Scan(&q.ID, &q.Code, &q.Title, &q.Mode, &q.Style, &q.Visibility, &q.PlayStatus)
+        rows.Scan(&q.ID, &q.Code, &q.Title, &q.Mode, &q.Style, &q.Visibility, &q.PlayStatus, &q.TimerDurationSec, &q.TimerEndAt)
         quizzes = append(quizzes, q)
     }
     w.Header().Set("Content-Type", "application/json")
@@ -563,7 +713,11 @@ func (app *App) adminUpdateQuizStatusHandler(w http.ResponseWriter, r *http.Requ
         app.QuizDB.Exec("UPDATE quizzes SET visibility = $1 WHERE id = $2", *req.Visibility, quizID)
     }
     if req.PlayStatus != nil {
-        app.QuizDB.Exec("UPDATE quizzes SET play_status = $1 WHERE id = $2", *req.PlayStatus, quizID)
+        if *req.PlayStatus == "started" {
+            app.QuizDB.Exec("UPDATE quizzes SET play_status = $1, timer_end_at = CASE WHEN timer_duration_sec IS NOT NULL THEN CURRENT_TIMESTAMP + (timer_duration_sec || ' seconds')::interval ELSE NULL END WHERE id = $2", *req.PlayStatus, quizID)
+        } else {
+            app.QuizDB.Exec("UPDATE quizzes SET play_status = $1 WHERE id = $2", *req.PlayStatus, quizID)
+        }
     }
 
     w.WriteHeader(http.StatusOK)
@@ -641,8 +795,8 @@ func (app *App) adminUpdateQuizHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = tx.Exec("UPDATE quizzes SET title = $1, mode = $2, style = $3 WHERE id = $4",
-		q.Title, q.Mode, q.Style, quizID)
+	_, err = tx.Exec("UPDATE quizzes SET title = $1, mode = $2, style = $3, timer_duration_sec = $4 WHERE id = $5",
+		q.Title, q.Mode, q.Style, q.TimerDurationSec, quizID)
 	if err != nil {
 		tx.Rollback()
 		http.Error(w, "Failed to update quiz", http.StatusInternalServerError)
@@ -743,8 +897,8 @@ func main() {
 			if len(parts) >= 4 {
 				quizID := parts[4]
 				var q Quiz
-				app.QuizDB.QueryRow("SELECT id, code, title, mode, style, visibility, play_status FROM quizzes WHERE id = $1", quizID).
-					Scan(&q.ID, &q.Code, &q.Title, &q.Mode, &q.Style, &q.Visibility, &q.PlayStatus)
+				app.QuizDB.QueryRow("SELECT id, code, title, mode, style, visibility, play_status, timer_duration_sec, timer_end_at FROM quizzes WHERE id = $1", quizID).
+					Scan(&q.ID, &q.Code, &q.Title, &q.Mode, &q.Style, &q.Visibility, &q.PlayStatus, &q.TimerDurationSec, &q.TimerEndAt)
 				rows, _ := app.QuizDB.Query("SELECT id, COALESCE(code, ''), text, options, correct_index, points, question_type, media_url, hint, penalty_points, explanation, lat, lng, radius FROM quiz_questions WHERE quiz_id = $1 ORDER BY id", quizID)
 				if rows != nil {
 					defer rows.Close()
