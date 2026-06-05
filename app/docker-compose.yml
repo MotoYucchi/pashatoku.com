@@ -14,7 +14,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U quiz_admin -d quiz_content"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
 
   # --- User DataBase ---
   user-db:
@@ -30,7 +31,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U user_admin -d user_personal_data"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
 
   # 2. Backend API (Go: Port 8080)
   backend:
@@ -73,7 +75,10 @@ services:
 
   # 4. Frontend (React + Vite: Port 3000)
   frontend:
-    build: ./frontend
+    build: 
+      context: ./frontend
+      args:
+        - VITE_ADMIN_PASSWORD=80558055
     container_name: pashatoku-frontend
     ports:
       - "3000:80"
