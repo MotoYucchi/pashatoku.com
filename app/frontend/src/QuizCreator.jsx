@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -7,15 +7,14 @@ function QuizCreator() {
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
 
-  // クイズ全体の設定
   const [title, setTitle] = useState('');
   const [customCode, setCustomCode] = useState('');
-  const [mode, setMode] = useState('normal'); // normal, spot, gps
-  const [style, setStyle] = useState('free'); // free, time_attack, fastest
+  const [mode, setMode] = useState('normal'); 
+  const [style, setStyle] = useState('free'); 
   
-  // 設問リスト
   const [questions, setQuestions] = useState([
     { 
+      code: '',
       text: '', 
       options: ['', '', '', ''], 
       correct_index: 0,
@@ -27,12 +26,42 @@ function QuizCreator() {
       explanation: '',
       lat: '',
       lng: '',
-      radius: 50 // メートル
+      radius: 50 
     }
   ]);
   
   const [createdCode, setCreatedCode] = useState(null);
   const [error, setError] = useState('');
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const editId = urlParams.get('id');
+  const editCode = urlParams.get('code');
+  const isEditMode = Boolean(editId && editCode);
+
+  useEffect(() => {
+    if (isAuthenticated && isEditMode) {
+      axios.get(`http://localhost:8080/api/admin/quizzes/${editId}`)
+        .then(res => {
+          const qz = res.data;
+          setTitle(qz.title);
+          setCustomCode(qz.code);
+          setMode(qz.mode);
+          setStyle(qz.style);
+          if (qz.questions && qz.questions.length > 0) {
+            setQuestions(qz.questions.map(q => ({
+              ...q,
+              options: q.options || ['', '', '', ''],
+              lat: q.lat || '',
+              lng: q.lng || '',
+              radius: q.radius || 50
+            })));
+          }
+        })
+        .catch(err => {
+          setError('編集するクイズの取得に失敗しました。');
+        });
+    }
+  }, [isAuthenticated, isEditMode, editId, editCode]);
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -47,7 +76,7 @@ function QuizCreator() {
 
   const addQuestion = () => {
     setQuestions([...questions, { 
-      text: '', options: ['', '', '', ''], correct_index: 0,
+      code: '', text: '', options: ['', '', '', ''], correct_index: 0,
       points: 1, question_type: 'radio', media_url: '', hint: '', penalty_points: 0, explanation: '', lat: '', lng: '', radius: 50
     }]);
   };
@@ -69,6 +98,15 @@ function QuizCreator() {
     const newQuestions = questions.filter((_, i) => i !== index);
     setQuestions(newQuestions);
   };
+
+  const generateRandomCode = (index) => {
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let code = "";
+    for(let i=0; i<5; i++){
+       code += charset.charAt(Math.floor(Math.random() * charset.length));
+    }
+    updateQuestion(index, 'code', code);
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -121,14 +159,19 @@ function QuizCreator() {
         payload.code = customCode.trim();
       }
 
-      const res = await axios.post('http://localhost:8080/api/quizzes', payload);
-      setCreatedCode(res.data.code);
+      if (isEditMode) {
+        await axios.put(`http://localhost:8080/api/admin/quizzes/${editId}`, payload);
+        setCreatedCode(payload.code || editCode);
+      } else {
+        const res = await axios.post('http://localhost:8080/api/quizzes', payload);
+        setCreatedCode(res.data.code);
+      }
     } catch (err) {
       console.error(err);
       if (err.response && err.response.status === 409) {
         setError('指定したクイズコードは既に使用されています。別のコードを指定してください。');
       } else {
-        setError('クイズの作成に失敗しました。');
+        setError(`クイズの${isEditMode ? '更新' : '作成'}に失敗しました。`);
       }
     }
   };
@@ -170,12 +213,10 @@ function QuizCreator() {
             <p className="text-xs text-slate-400 mb-1 font-bold">クイズコード</p>
             <p className="text-2xl font-black tracking-widest text-emerald-400">{createdCode}</p>
           </div>
-          <button 
-            onClick={() => window.location.reload()}
-            className="w-full bg-emerald-600 text-white px-8 py-4 rounded-xl font-bold hover:bg-emerald-500 transition-all mb-4"
-          >
-            新しく別のクイズを作成する
-          </button>
+          <div className="flex gap-4">
+             <button onClick={() => window.location.reload()} className="flex-1 bg-emerald-600 text-white py-4 rounded-xl font-bold hover:bg-emerald-500 transition-all">続けて作成</button>
+             <a href="/admin" className="flex-1 bg-slate-700 text-white py-4 rounded-xl font-bold hover:bg-slate-600 transition-all flex items-center justify-center">ダッシュボードへ戻る</a>
+          </div>
         </div>
       </div>
     );
@@ -187,14 +228,16 @@ function QuizCreator() {
         <header className="mb-8 flex justify-between items-center bg-slate-800 p-6 rounded-2xl border border-slate-700">
           <div>
             <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
-              管理ダッシュボード
+              {isEditMode ? 'イベント編集' : 'イベント作成'}
             </h1>
-            <p className="text-slate-400 text-sm mt-1">クイズ・イベントの作成</p>
+            <p className="text-slate-400 text-sm mt-1">
+              {isEditMode ? '既存のクイズイベントを編集します' : '新しいクイズイベントを設定します'}
+            </p>
           </div>
+          <a href="/admin" className="text-slate-400 hover:text-white font-bold bg-slate-900 px-4 py-2 rounded-lg border border-slate-700">← 戻る</a>
         </header>
 
         <form onSubmit={handleSubmit} className="space-y-8">
-          {/* --- クイズの基本設定 --- */}
           <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl space-y-6">
             <h2 className="text-xl font-black text-emerald-400 mb-4 border-b border-slate-700 pb-2">1. イベント基本設定</h2>
             
@@ -238,12 +281,12 @@ function QuizCreator() {
               <input 
                 type="text" value={customCode} onChange={(e) => setCustomCode(e.target.value)}
                 placeholder="例：WEBTEST_2026"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-purple-500 outline-none font-mono"
+                disabled={isEditMode}
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-purple-500 outline-none font-mono disabled:opacity-50"
               />
             </div>
           </div>
 
-          {/* --- 各問題の設定 --- */}
           <div className="space-y-8">
             <h2 className="text-xl font-black text-emerald-400 ml-2">2. 問題の作成</h2>
             {questions.map((q, qIndex) => (
@@ -256,145 +299,99 @@ function QuizCreator() {
                 </div>
 
                 <div className="space-y-6">
-                  {/* 問題文 */}
+                  {mode === 'spot' && (
+                     <div className="bg-pink-900/20 p-4 rounded-xl border border-pink-500/30 flex items-end gap-4">
+                        <div className="flex-1">
+                          <label className="block text-xs font-bold text-pink-400 mb-1">🎯 スポット専用問題コード (5文字)</label>
+                          <input type="text" value={q.code} onChange={(e)=>updateQuestion(qIndex, 'code', e.target.value)} maxLength={5} placeholder="空の場合は自動生成" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono"/>
+                        </div>
+                        <button type="button" onClick={()=>generateRandomCode(qIndex)} className="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg text-sm font-bold text-slate-200 h-[38px] transition-colors">ランダム生成</button>
+                     </div>
+                  )}
+
                   <div>
                     <label className="block text-xs font-bold text-slate-400 mb-2 uppercase">問題文 <span className="text-red-400">*</span></label>
-                    <textarea 
-                      value={q.text} onChange={(e) => updateQuestion(qIndex, 'text', e.target.value)}
-                      placeholder="問題文を入力..." rows={3}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-purple-500 outline-none resize-none"
-                    />
+                    <textarea value={q.text} onChange={(e) => updateQuestion(qIndex, 'text', e.target.value)} placeholder="問題文を入力..." rows={3} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-purple-500 outline-none resize-none"/>
                   </div>
 
-                  {/* メディアとヒント */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-400 mb-2">画像URL / メディア (任意)</label>
-                      <input 
-                        type="text" value={q.media_url} onChange={(e) => updateQuestion(qIndex, 'media_url', e.target.value)}
-                        placeholder="https://..."
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm"
-                      />
+                      <input type="text" value={q.media_url} onChange={(e) => updateQuestion(qIndex, 'media_url', e.target.value)} placeholder="https://..." className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm"/>
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-400 mb-2">ヒントテキスト (任意)</label>
-                      <input 
-                        type="text" value={q.hint} onChange={(e) => updateQuestion(qIndex, 'hint', e.target.value)}
-                        placeholder="ヒントを見ると得点が半減します"
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm"
-                      />
+                      <input type="text" value={q.hint} onChange={(e) => updateQuestion(qIndex, 'hint', e.target.value)} placeholder="ヒントを見ると得点が半減します" className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm"/>
                     </div>
                   </div>
 
-                  {/* スコア・ペナルティ */}
                   <div className="grid grid-cols-3 gap-4 bg-slate-900/50 p-4 rounded-xl border border-slate-700">
                     <div>
-                      <label className="block text-xs font-bold text-emerald-400 mb-2">正解時の獲得点数</label>
-                      <input 
-                        type="number" value={q.points} onChange={(e) => updateQuestion(qIndex, 'points', e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 outline-none text-white text-center font-bold" min="1"
-                      />
+                      <label className="block text-xs font-bold text-emerald-400 mb-2">配点</label>
+                      <input type="number" value={q.points} onChange={(e) => updateQuestion(qIndex, 'points', e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 outline-none text-white text-center font-bold" min="1"/>
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-red-400 mb-2">誤答時の減点 (ペナルティ)</label>
-                      <input 
-                        type="number" value={q.penalty_points} onChange={(e) => updateQuestion(qIndex, 'penalty_points', e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 outline-none text-white text-center font-bold" min="0"
-                      />
+                      <label className="block text-xs font-bold text-red-400 mb-2">誤答ペナルティ</label>
+                      <input type="number" value={q.penalty_points} onChange={(e) => updateQuestion(qIndex, 'penalty_points', e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 outline-none text-white text-center font-bold" min="0"/>
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-400 mb-2">問題の形式</label>
-                      <select 
-                        value={q.question_type} onChange={(e) => updateQuestion(qIndex, 'question_type', e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 outline-none text-white font-bold"
-                      >
+                      <label className="block text-xs font-bold text-slate-400 mb-2">形式</label>
+                      <select value={q.question_type} onChange={(e) => updateQuestion(qIndex, 'question_type', e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 outline-none text-white font-bold">
                         <option value="radio">4択問題</option>
-                        {/* 将来的に text（記述）なども追加 */}
                       </select>
                     </div>
                   </div>
 
-                  {/* GPS設定 (ModeがGPSの時のみ表示) */}
                   {mode === 'gps' && (
                     <div className="bg-blue-900/20 p-4 rounded-xl border border-blue-500/30">
                       <p className="text-xs text-blue-400 font-bold mb-3">📍 位置情報設定（GPSモード）</p>
                       <div className="grid grid-cols-3 gap-4">
                         <div>
                           <label className="block text-xs text-slate-400 mb-1">緯度 (Latitude)</label>
-                          <input 
-                            type="text" value={q.lat} onChange={(e) => updateQuestion(qIndex, 'lat', e.target.value)}
-                            placeholder="35.6812" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm"
-                          />
+                          <input type="text" value={q.lat} onChange={(e) => updateQuestion(qIndex, 'lat', e.target.value)} placeholder="35.6812" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm"/>
                         </div>
                         <div>
                           <label className="block text-xs text-slate-400 mb-1">経度 (Longitude)</label>
-                          <input 
-                            type="text" value={q.lng} onChange={(e) => updateQuestion(qIndex, 'lng', e.target.value)}
-                            placeholder="139.7671" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm"
-                          />
+                          <input type="text" value={q.lng} onChange={(e) => updateQuestion(qIndex, 'lng', e.target.value)} placeholder="139.7671" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm"/>
                         </div>
                         <div>
                           <label className="block text-xs text-slate-400 mb-1">許容半径 (メートル)</label>
-                          <input 
-                            type="number" value={q.radius} onChange={(e) => updateQuestion(qIndex, 'radius', e.target.value)}
-                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-center"
-                          />
+                          <input type="number" value={q.radius} onChange={(e) => updateQuestion(qIndex, 'radius', e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-center"/>
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {/* 選択肢 */}
                   <div>
                     <label className="block text-xs font-bold text-slate-400 mb-3 uppercase">選択肢と正解 <span className="text-red-400">*</span></label>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {q.options.map((opt, oIndex) => (
                         <div key={oIndex} className={`flex items-center space-x-3 p-3 rounded-xl border-2 transition-all ${q.correct_index === oIndex ? 'bg-purple-900/30 border-purple-500' : 'bg-slate-900 border-slate-700'}`}>
-                          <input 
-                            type="radio" 
-                            name={`correct-${qIndex}`} checked={q.correct_index === oIndex}
-                            onChange={() => updateQuestion(qIndex, 'correct_index', oIndex)}
-                            className="w-5 h-5 text-purple-600 bg-slate-800 border-slate-600"
-                          />
-                          <input 
-                            type="text" value={opt} onChange={(e) => updateOption(qIndex, oIndex, e.target.value)}
-                            placeholder={`選択肢 ${['A', 'B', 'C', 'D'][oIndex]}`}
-                            className="flex-1 bg-transparent outline-none font-bold"
-                          />
+                          <input type="radio" name={`correct-${qIndex}`} checked={q.correct_index === oIndex} onChange={() => updateQuestion(qIndex, 'correct_index', oIndex)} className="w-5 h-5 text-purple-600 bg-slate-800 border-slate-600"/>
+                          <input type="text" value={opt} onChange={(e) => updateOption(qIndex, oIndex, e.target.value)} placeholder={`選択肢 ${['A', 'B', 'C', 'D'][oIndex]}`} className="flex-1 bg-transparent outline-none font-bold"/>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  {/* 解説 */}
                   <div>
                     <label className="block text-xs font-bold text-slate-400 mb-2">解説 (回答後に表示)</label>
-                    <textarea 
-                      value={q.explanation} onChange={(e) => updateQuestion(qIndex, 'explanation', e.target.value)}
-                      placeholder="正解の理由や参考リンクなど..." rows={2}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 outline-none text-sm resize-none"
-                    />
+                    <textarea value={q.explanation} onChange={(e) => updateQuestion(qIndex, 'explanation', e.target.value)} placeholder="正解の理由や参考リンクなど..." rows={2} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 outline-none text-sm resize-none"/>
                   </div>
                 </div>
               </div>
             ))}
           </div>
 
-          <button 
-            type="button" onClick={addQuestion}
-            className="w-full border-2 border-dashed border-slate-600 bg-slate-800/50 text-slate-300 hover:text-white hover:border-purple-500 hover:bg-slate-800 py-6 rounded-3xl font-black text-lg transition-all shadow-inner"
-          >
+          <button type="button" onClick={addQuestion} className="w-full border-2 border-dashed border-slate-600 bg-slate-800/50 text-slate-300 hover:text-white hover:border-purple-500 hover:bg-slate-800 py-6 rounded-3xl font-black text-lg transition-all shadow-inner">
             + 新しい問題を追加する
           </button>
 
           {error && <p className="text-red-400 text-center font-bold bg-red-900/20 py-4 rounded-xl">{error}</p>}
 
           <div className="sticky bottom-6 mt-10">
-            <button 
-              type="submit" 
-              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 py-6 rounded-3xl font-black text-2xl shadow-[0_0_30px_rgba(168,85,247,0.4)] active:scale-95 transition-all"
-            >
-              クイズイベントを作成する
+            <button type="submit" className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 py-6 rounded-3xl font-black text-2xl shadow-[0_0_30px_rgba(16,185,129,0.4)] active:scale-95 transition-all">
+              💾 保存してクイズを{isEditMode ? '更新' : '作成'}する
             </button>
           </div>
         </form>

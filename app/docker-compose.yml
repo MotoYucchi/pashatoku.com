@@ -49,24 +49,12 @@ services:
       user-db:
         condition: service_healthy
 
-  # 3. Admin Panel (Directus: Port 8055)
-  admin:
-    image: directus/directus:latest
-    container_name: pashatoku-admin
+  # 3. Admin Panel (Adminer: Port 8055)
+  db-admin:
+    image: adminer:latest
+    container_name: pashatoku-adminer
     ports:
-      - "8055:8055"
-    environment:
-      KEY: "pashatoku-secret-key"
-      SECRET: "8055805580558055"
-      ADMIN_EMAIL: "admin@pashatoku.com"
-      ADMIN_PASSWORD: "80558055"
-      DB_CLIENT: "pg"
-      DB_HOST: "quiz-db"
-      DB_PORT: "5432"
-      DB_DATABASE: "quiz_content"
-      DB_USER: "quiz_admin"
-      DB_PASSWORD: "quiz_password"
-      AUTH_PROVIDERS: "static"
+      - "8055:8080"
     depends_on:
       quiz-db:
         condition: service_healthy

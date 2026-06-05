@@ -92,6 +92,40 @@ function App() {
     }
   }, [isRegistered, quizCode, quizData]);
 
+  // ポーリング処理 (ステータス同期)
+  useEffect(() => {
+    let interval;
+    if (quizCode && quizData && !isFinished) {
+      interval = setInterval(async () => {
+        try {
+          const res = await axios.get(`http://localhost:8080/api/quizzes/status?code=${quizCode}`);
+          const { play_status, visibility } = res.data;
+          
+          if (visibility === 'closed') {
+            setError('このクイズイベントは閉鎖されました。');
+            setQuizData(null);
+            setQuizCode(null);
+            return;
+          }
+
+          if (quizData.play_status !== play_status) {
+            if (play_status === 'started' && quizData.play_status === 'waiting') {
+              // 管理者が「開始」にした場合、問題を再取得する
+              startQuiz();
+            } else {
+              setQuizData(prev => ({...prev, play_status}));
+            }
+          }
+        } catch (err) {
+          // ネットワークエラー等は無視して次回に再試行
+        }
+      }, 3000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [quizCode, quizData, isFinished]);
+
   const handleRegister = async (e) => {
     e.preventDefault();
     setError('');
@@ -153,18 +187,21 @@ function App() {
       const res = await axios.get(`http://localhost:8080/api/quizzes?code=${quizCode}`);
       setQuizData(res.data);
       setCurrentQIndex(0);
-      setGpsVerified(false); // 次の問題の描画時にGPSチェックを走らせる
+      setGpsVerified(false);
     } catch (err) {
-      setError('クイズが見つかりません。');
+      if (err.response && err.response.status === 403) {
+          setError('このイベントは現在閉鎖されているか、アクセスできません。');
+      } else {
+          setError('クイズが見つかりません。');
+      }
       setQuizCode(null);
     } finally {
       setIsLoadingQuiz(false);
     }
   };
 
-  // 質問が変わるたびにGPSチェックが必要なら走らせる
   useEffect(() => {
-    if (!quizData) return;
+    if (!quizData || quizData.play_status !== 'started' || !quizData.questions || quizData.questions.length === 0) return;
     const q = quizData.questions[currentQIndex];
     if (quizData.mode === 'gps' && q.lat && q.lng && !gpsVerified) {
       setGpsError('現在地を検証しています...');
@@ -240,7 +277,7 @@ function App() {
       </header>
 
       {!isRegistered ? (
-        // --- 登録フォーム (省略せずにそのまま実装) ---
+        // --- 登録フォーム ---
         <form onSubmit={handleRegister} className="w-full max-w-md bg-slate-800 p-8 rounded-3xl shadow-2xl border border-slate-700">
           <h2 className="text-xl font-bold mb-6 text-center">参加者エントリー</h2>
           <div className="space-y-4">
@@ -274,7 +311,7 @@ function App() {
             同意して参加する
           </button>
           <div className="mt-6 text-center">
-             <a href="/create" className="text-slate-500 text-xs hover:text-white underline">管理者: クイズを管理・作成する</a>
+             <a href="/admin/create" className="text-slate-500 text-xs hover:text-white underline">管理者: クイズを管理・作成する</a>
           </div>
         </form>
       ) : !quizData ? (
@@ -303,7 +340,7 @@ function App() {
               </div>
             </div>
           ) : (
-            <div className="bg-blue-600 p-10 rounded-3xl shadow-2xl animate-bounce">
+            <div className="bg-blue-600 p-10 rounded-3xl shadow-2xl animate-in zoom-in">
               <h2 className="text-3xl font-black mb-2">Quiz Found!</h2>
               <p className="text-xl font-mono mb-6 bg-black/20 py-2 rounded-xl">Code: {quizCode}</p>
               <button onClick={startQuiz} disabled={isLoadingQuiz} className="w-full bg-white text-blue-600 px-10 py-4 rounded-xl font-black shadow-lg hover:scale-105 active:scale-95 transition-all">
@@ -313,7 +350,44 @@ function App() {
             </div>
           )}
         </div>
-      ) : !isFinished ? (
+      ) : isFinished ? (
+        // --- 結果画面 ---
+        <div className="w-full max-w-md text-center animate-in zoom-in duration-500">
+          <div className="bg-gradient-to-br from-indigo-600 to-purple-600 p-10 rounded-3xl shadow-2xl border border-white/10">
+            <h2 className="text-3xl font-black mb-2 text-white">Quiz Finished!</h2>
+            <p className="text-indigo-200 mb-8 font-bold">{quizData.title}</p>
+            <div className="bg-black/20 rounded-3xl p-8 mb-8 backdrop-blur-md shadow-inner border border-white/5">
+              <p className="text-lg font-bold mb-2 text-indigo-100">Total Score</p>
+              <p className="text-7xl font-black tracking-tighter text-white">
+                {score}<span className="text-2xl text-indigo-300 ml-1">pt</span>
+              </p>
+            </div>
+            <button onClick={() => window.location.reload()} className="w-full bg-white text-indigo-600 px-8 py-4 rounded-xl font-black shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95 transition-all">
+              トップへ戻る
+            </button>
+          </div>
+        </div>
+      ) : quizData.play_status === 'waiting' ? (
+        // --- 待機画面 ---
+        <div className="w-full max-w-md text-center animate-in zoom-in duration-500">
+           <div className="bg-slate-800 p-10 rounded-3xl shadow-2xl border border-slate-700">
+             <div className="animate-spin text-5xl mb-6 inline-block">⏳</div>
+             <h2 className="text-2xl font-black mb-4 text-emerald-400">待機中</h2>
+             <p className="text-slate-300 font-bold mb-2">{quizData.title}</p>
+             <p className="text-slate-500 text-sm">管理者が開始するまで、この画面のままお待ちください。</p>
+           </div>
+         </div>
+      ) : quizData.play_status === 'ended' ? (
+        // --- 終了画面 ---
+        <div className="w-full max-w-md text-center animate-in zoom-in duration-500">
+           <div className="bg-slate-800 p-10 rounded-3xl shadow-2xl border border-slate-700">
+             <div className="text-5xl mb-6 inline-block">🏁</div>
+             <h2 className="text-2xl font-black mb-4 text-slate-300">イベント終了</h2>
+             <p className="text-slate-400 font-bold mb-6">このイベントは終了しました。</p>
+             <button onClick={() => window.location.reload()} className="w-full bg-slate-700 text-white px-8 py-4 rounded-xl font-black hover:bg-slate-600 transition-all">トップへ戻る</button>
+           </div>
+         </div>
+      ) : (
         // --- クイズプレイ画面 ---
         <div className="w-full max-w-md animate-in slide-in-from-bottom-8 duration-500">
           <div className="mb-4 flex justify-between items-center text-slate-400 font-bold text-sm">
@@ -440,23 +514,6 @@ function App() {
               )}
             </>
           )}
-        </div>
-      ) : (
-        // --- 結果画面 ---
-        <div className="w-full max-w-md text-center animate-in zoom-in duration-500">
-          <div className="bg-gradient-to-br from-indigo-600 to-purple-600 p-10 rounded-3xl shadow-2xl border border-white/10">
-            <h2 className="text-3xl font-black mb-2 text-white">Quiz Finished!</h2>
-            <p className="text-indigo-200 mb-8 font-bold">{quizData.title}</p>
-            <div className="bg-black/20 rounded-3xl p-8 mb-8 backdrop-blur-md shadow-inner border border-white/5">
-              <p className="text-lg font-bold mb-2 text-indigo-100">Total Score</p>
-              <p className="text-7xl font-black tracking-tighter text-white">
-                {score}<span className="text-2xl text-indigo-300 ml-1">pt</span>
-              </p>
-            </div>
-            <button onClick={() => window.location.reload()} className="w-full bg-white text-indigo-600 px-8 py-4 rounded-xl font-black shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95 transition-all">
-              トップへ戻る
-            </button>
-          </div>
         </div>
       )}
     </div>
