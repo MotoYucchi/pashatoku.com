@@ -135,6 +135,10 @@ func createTables(app *App) {
 	    question_id INTEGER PRIMARY KEY REFERENCES quiz_questions(id) ON DELETE CASCADE,
 	    user_id INTEGER NOT NULL,
 	    locked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE TABLE IF NOT EXISTS global_settings (
+	    key VARCHAR(50) PRIMARY KEY,
+	    value TEXT NOT NULL
 	);`
 	if _, err := app.QuizDB.Exec(quizSchema); err != nil {
 		log.Fatal("Failed to create Quiz table:", err)
@@ -274,8 +278,8 @@ func (app *App) createQuizHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = tx.QueryRow("INSERT INTO quizzes (code, title, mode, style, visibility, play_status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id", 
-		q.Code, q.Title, q.Mode, q.Style, q.Visibility, q.PlayStatus).Scan(&q.ID)
+	err = tx.QueryRow("INSERT INTO quizzes (code, title, mode, style, visibility, play_status, timer_duration_sec) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id", 
+		q.Code, q.Title, q.Mode, q.Style, q.Visibility, q.PlayStatus, q.TimerDurationSec).Scan(&q.ID)
 	if err != nil {
 		tx.Rollback()
 		log.Printf("DB error: %v", err)
@@ -339,8 +343,13 @@ func (app *App) getQuizStatusHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
     var q Quiz
+    var nullTimer sql.NullTime
     err := app.QuizDB.QueryRow("SELECT id, code, visibility, play_status, timer_end_at FROM quizzes WHERE code = $1", code).
-		Scan(&q.ID, &q.Code, &q.Visibility, &q.PlayStatus, &q.TimerEndAt)
+		Scan(&q.ID, &q.Code, &q.Visibility, &q.PlayStatus, &nullTimer)
+    if nullTimer.Valid {
+        t := nullTimer.Time
+        q.TimerEndAt = &t
+    }
 		
 	if err == sql.ErrNoRows {
 		// もし見つからなければ、quiz_questions.code として検索
@@ -350,8 +359,13 @@ func (app *App) getQuizStatusHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Quiz not found", http.StatusNotFound)
 			return
 		}
+		var nullTimer2 sql.NullTime
 		err = app.QuizDB.QueryRow("SELECT id, code, visibility, play_status, timer_end_at FROM quizzes WHERE id = $1", quizID).
-		    Scan(&q.ID, &q.Code, &q.Visibility, &q.PlayStatus, &q.TimerEndAt)
+		    Scan(&q.ID, &q.Code, &q.Visibility, &q.PlayStatus, &nullTimer2)
+		if nullTimer2.Valid {
+			t2 := nullTimer2.Time
+			q.TimerEndAt = &t2
+		}
 	}
 	
 	if err != nil {
@@ -378,8 +392,13 @@ func (app *App) getQuizHandler(w http.ResponseWriter, r *http.Request) {
 	var q Quiz
 	questionCodeFilter := ""
 
+	var nullTimer sql.NullTime
 	err := app.QuizDB.QueryRow("SELECT id, code, title, mode, style, visibility, play_status, timer_duration_sec, timer_end_at FROM quizzes WHERE code = $1", code).
-		Scan(&q.ID, &q.Code, &q.Title, &q.Mode, &q.Style, &q.Visibility, &q.PlayStatus, &q.TimerDurationSec, &q.TimerEndAt)
+		Scan(&q.ID, &q.Code, &q.Title, &q.Mode, &q.Style, &q.Visibility, &q.PlayStatus, &q.TimerDurationSec, &nullTimer)
+	if nullTimer.Valid {
+		t := nullTimer.Time
+		q.TimerEndAt = &t
+	}
 		
 	if err == sql.ErrNoRows {
 		var quizID int
@@ -388,8 +407,13 @@ func (app *App) getQuizHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Quiz or Question not found", http.StatusNotFound)
 			return
 		}
+		var nullTimer2 sql.NullTime
 		err = app.QuizDB.QueryRow("SELECT id, code, title, mode, style, visibility, play_status, timer_duration_sec, timer_end_at FROM quizzes WHERE id = $1", quizID).
-		    Scan(&q.ID, &q.Code, &q.Title, &q.Mode, &q.Style, &q.Visibility, &q.PlayStatus, &q.TimerDurationSec, &q.TimerEndAt)
+		    Scan(&q.ID, &q.Code, &q.Title, &q.Mode, &q.Style, &q.Visibility, &q.PlayStatus, &q.TimerDurationSec, &nullTimer2)
+		if nullTimer2.Valid {
+			t2 := nullTimer2.Time
+			q.TimerEndAt = &t2
+		}
 		questionCodeFilter = code
 	} else if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
@@ -485,8 +509,13 @@ func (app *App) userHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	var history []HistoryItem
 	for rows.Next() {
 		var h HistoryItem
+		var nullTimer sql.NullTime
 		var timerEndAt *time.Time
-		rows.Scan(&h.QuizID, &h.Code, &h.Title, &h.PlayStatus, &timerEndAt, &h.TotalScore)
+		rows.Scan(&h.QuizID, &h.Code, &h.Title, &h.PlayStatus, &nullTimer, &h.TotalScore)
+		if nullTimer.Valid {
+			t := nullTimer.Time
+			timerEndAt = &t
+		}
 		adjustQuizStatus(&h.PlayStatus, timerEndAt)
 		history = append(history, h)
 	}
@@ -581,12 +610,17 @@ func (app *App) answerHandler(w http.ResponseWriter, r *http.Request) {
 
 	var q Question
 	var quizStyle, quizVisibility, quizPlayStatus string
+	var nullTimer sql.NullTime
 	var timerEndAt *time.Time
 	err = tx.QueryRow(`
 		SELECT q.correct_index, q.points, q.penalty_points, q.explanation, qz.style, qz.visibility, qz.play_status, qz.timer_end_at
 		FROM quiz_questions q 
 		JOIN quizzes qz ON q.quiz_id = qz.id 
-		WHERE q.id = $1`, req.QuestionID).Scan(&q.CorrectIndex, &q.Points, &q.PenaltyPoints, &q.Explanation, &quizStyle, &quizVisibility, &quizPlayStatus, &timerEndAt)
+		WHERE q.id = $1`, req.QuestionID).Scan(&q.CorrectIndex, &q.Points, &q.PenaltyPoints, &q.Explanation, &quizStyle, &quizVisibility, &quizPlayStatus, &nullTimer)
+	if nullTimer.Valid {
+		t := nullTimer.Time
+		timerEndAt = &t
+	}
 	
 	if err != nil {
 		http.Error(w, "Question not found", http.StatusNotFound)
@@ -685,7 +719,13 @@ func (app *App) adminGetQuizzesHandler(w http.ResponseWriter, r *http.Request) {
     quizzes := []Quiz{}
     for rows.Next() {
         var q Quiz
-        rows.Scan(&q.ID, &q.Code, &q.Title, &q.Mode, &q.Style, &q.Visibility, &q.PlayStatus, &q.TimerDurationSec, &q.TimerEndAt)
+        var nullTimer sql.NullTime
+        rows.Scan(&q.ID, &q.Code, &q.Title, &q.Mode, &q.Style, &q.Visibility, &q.PlayStatus, &q.TimerDurationSec, &nullTimer)
+        if nullTimer.Valid {
+            t := nullTimer.Time
+            q.TimerEndAt = &t
+        }
+        adjustQuizStatus(&q.PlayStatus, q.TimerEndAt)
         quizzes = append(quizzes, q)
     }
     w.Header().Set("Content-Type", "application/json")
@@ -865,7 +905,15 @@ func main() {
 	createTables(app)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/user/register", app.registerUserHandler)
+	mux.HandleFunc("/api/user/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/register") {
+			app.registerUserHandler(w, r)
+		} else if strings.HasSuffix(r.URL.Path, "/history") {
+			app.userHistoryHandler(w, r)
+		} else if strings.HasSuffix(r.URL.Path, "/answered") {
+			app.userAnsweredHandler(w, r)
+		}
+	})
 	mux.HandleFunc("/api/quizzes", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			app.createQuizHandler(w, r)
@@ -877,6 +925,10 @@ func main() {
 	})
 	mux.HandleFunc("/api/quizzes/status", app.getQuizStatusHandler)
 	mux.HandleFunc("/api/quizzes/answer", app.answerHandler)
+	
+	// Global Timer Handlers
+	mux.HandleFunc("/api/global_timer", app.getGlobalTimerHandler)
+	mux.HandleFunc("/api/admin/global_timer", app.adminGlobalTimerHandler)
 	
 	// Admin APIs
 	mux.HandleFunc("/api/admin/quizzes", func(w http.ResponseWriter, r *http.Request) {
@@ -897,8 +949,13 @@ func main() {
 			if len(parts) >= 4 {
 				quizID := parts[4]
 				var q Quiz
+				var nullTimer sql.NullTime
 				app.QuizDB.QueryRow("SELECT id, code, title, mode, style, visibility, play_status, timer_duration_sec, timer_end_at FROM quizzes WHERE id = $1", quizID).
-					Scan(&q.ID, &q.Code, &q.Title, &q.Mode, &q.Style, &q.Visibility, &q.PlayStatus, &q.TimerDurationSec, &q.TimerEndAt)
+					Scan(&q.ID, &q.Code, &q.Title, &q.Mode, &q.Style, &q.Visibility, &q.PlayStatus, &q.TimerDurationSec, &nullTimer)
+				if nullTimer.Valid {
+					t := nullTimer.Time
+					q.TimerEndAt = &t
+				}
 				rows, _ := app.QuizDB.Query("SELECT id, COALESCE(code, ''), text, options, correct_index, points, question_type, media_url, hint, penalty_points, explanation, lat, lng, radius FROM quiz_questions WHERE quiz_id = $1 ORDER BY id", quizID)
 				if rows != nil {
 					defer rows.Close()
@@ -920,6 +977,7 @@ func main() {
 
 	handler := cors.New(cors.Options{
 		AllowedMethods: []string{"GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders: []string{"*"},
 	}).Handler(mux)
 
 	fmt.Println("Backend Server running on :8080")
@@ -942,4 +1000,48 @@ func initDB(url string) *sql.DB {
 	}
 	log.Fatalf("DB connection failed after retries: %v", err)
 	return nil
+}
+
+func (app *App) getGlobalTimerHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var val string
+	err := app.QuizDB.QueryRow("SELECT value FROM global_settings WHERE key = 'global_timer_end_at'").Scan(&val)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"end_at": nil})
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"end_at": val})
+}
+
+func (app *App) adminGlobalTimerHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		DurationSec *int `json:"duration_sec"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if req.DurationSec == nil || *req.DurationSec <= 0 {
+		app.QuizDB.Exec("DELETE FROM global_settings WHERE key = 'global_timer_end_at'")
+	} else {
+		app.QuizDB.Exec(`
+			INSERT INTO global_settings (key, value) 
+			VALUES ('global_timer_end_at', to_char(CURRENT_TIMESTAMP + ($1 || ' seconds')::interval, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
+			ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+		`, *req.DurationSec)
+	}
+	
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }

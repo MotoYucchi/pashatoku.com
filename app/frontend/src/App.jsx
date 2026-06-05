@@ -52,6 +52,64 @@ function App() {
   const [hintUsed, setHintUsed] = useState(false)
   const [gpsError, setGpsError] = useState('')
   const [gpsVerified, setGpsVerified] = useState(false)
+  const [timeLeft, setTimeLeft] = useState(null);
+  const [globalTimerEndAt, setGlobalTimerEndAt] = useState(null);
+  const [isGlobalEnded, setIsGlobalEnded] = useState(false);
+  const [globalTimeLeft, setGlobalTimeLeft] = useState(null);
+
+  useEffect(() => {
+    const fetchGlobal = async () => {
+      try {
+        const res = await axios.get(`http://${window.location.hostname}:8080/api/global_timer`);
+        setGlobalTimerEndAt(res.data.end_at);
+      } catch (e) { }
+    };
+    fetchGlobal();
+    const int = setInterval(fetchGlobal, 30000); // Fetch every 30s
+    return () => clearInterval(int);
+  }, []);
+
+  useEffect(() => {
+    if (globalTimerEndAt) {
+      const end = new Date(globalTimerEndAt).getTime();
+      const interval = setInterval(() => {
+        const now = Date.now();
+        const diff = Math.floor((end - now) / 1000);
+        if (diff <= 0) {
+          clearInterval(interval);
+          setGlobalTimeLeft(0);
+          setIsGlobalEnded(true);
+        } else {
+          setGlobalTimeLeft(diff);
+          setIsGlobalEnded(false);
+        }
+      }, 1000);
+      return () => clearInterval(interval);
+    } else {
+      setGlobalTimeLeft(null);
+      setIsGlobalEnded(false);
+    }
+  }, [globalTimerEndAt]);
+
+  useEffect(() => {
+    if (quizData && quizData.timer_end_at && quizData.play_status === 'started') {
+      const end = new Date(quizData.timer_end_at).getTime();
+      const interval = setInterval(() => {
+        const now = Date.now();
+        const diff = Math.floor((end - now) / 1000);
+        if (diff <= 0) {
+          clearInterval(interval);
+          setTimeLeft(0);
+          setQuizData(prev => ({...prev, play_status: 'ended'}));
+        } else {
+          setTimeLeft(diff);
+        }
+      }, 1000);
+      return () => clearInterval(interval);
+    } else {
+      setTimeLeft(null);
+    }
+  }, [quizData]);
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -78,7 +136,7 @@ function App() {
 
   const fetchAnsweredQuestions = async (uid) => {
     try {
-      const res = await axios.get(`http://localhost:8080/api/user/${uid}/answered`);
+      const res = await axios.get(`http://${window.location.hostname}:8080/api/user/${uid}/answered`);
       setAnsweredQuestionIds(res.data || []);
     } catch (e) {}
   };
@@ -86,7 +144,7 @@ function App() {
   const fetchHistory = async () => {
     if (!userId) return;
     try {
-      const res = await axios.get(`http://localhost:8080/api/user/${userId}/history`);
+      const res = await axios.get(`http://${window.location.hostname}:8080/api/user/${userId}/history`);
       setHistoryData(res.data || []);
     } catch (e) {}
   };
@@ -118,7 +176,7 @@ function App() {
     if (quizCode && quizData && !isFinished) {
       interval = setInterval(async () => {
         try {
-          const res = await axios.get(`http://localhost:8080/api/quizzes/status?code=${quizCode}`);
+          const res = await axios.get(`http://${window.location.hostname}:8080/api/quizzes/status?code=${quizCode}`);
           const { play_status, visibility } = res.data;
           
           if (visibility === 'closed') {
@@ -154,7 +212,7 @@ function App() {
       return;
     }
     try {
-      const res = await axios.post('http://localhost:8080/api/user/register', {
+      const res = await axios.post(`http://${window.location.hostname}:8080/api/user/register`, {
         name, student_id: studentId
       });
       Cookies.set('pashatoku_name', name, { expires: 30 });
@@ -205,7 +263,7 @@ function App() {
     setIsLoadingQuiz(true);
     setError('');
     try {
-      const res = await axios.get(`http://localhost:8080/api/quizzes?code=${quizCode}`);
+      const res = await axios.get(`http://${window.location.hostname}:8080/api/quizzes?code=${quizCode}`);
       setQuizData(res.data);
       setCurrentQIndex(0);
       setGpsVerified(false);
@@ -251,7 +309,7 @@ function App() {
         used_hint: hintUsed
       };
       
-      const res = await axios.post('http://localhost:8080/api/quizzes/answer', payload);
+      const res = await axios.post(`http://${window.location.hostname}:8080/api/quizzes/answer`, payload);
       
       if (res.data.is_locked) {
         setIsLocked(true);
@@ -293,15 +351,64 @@ function App() {
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center p-6 font-sans relative">
       <TermsModal isOpen={activeModal !== null} onClose={() => setActiveModal(null)} type={activeModal} />
+      {globalTimeLeft !== null && !isGlobalEnded && (
+        <div className="fixed top-0 left-0 w-full bg-red-900/90 backdrop-blur-md text-red-100 text-center py-2 font-black z-50 shadow-[0_4px_20px_rgba(220,38,38,0.4)] flex justify-center items-center gap-3 border-b border-red-500/50">
+          <span>🌍 サービス全体終了まで</span>
+          <span className="text-xl tracking-widest font-mono">
+            {Math.floor(globalTimeLeft / 86400) > 0 ? `${Math.floor(globalTimeLeft / 86400)}日 ` : ''}
+            {Math.floor((globalTimeLeft % 86400) / 3600).toString().padStart(2, '0')}:{(Math.floor((globalTimeLeft % 3600) / 60)).toString().padStart(2, '0')}:{(globalTimeLeft % 60).toString().padStart(2, '0')}
+          </span>
+        </div>
+      )}
+      {quizData && quizData.timer_end_at && quizData.play_status === 'started' && timeLeft !== null && (
+        <div className="fixed top-0 left-0 w-full bg-red-600/90 backdrop-blur-md text-white text-center py-2 font-black z-50 shadow-lg flex justify-center items-center gap-3">
+          <span>⏳ イベント終了まで</span>
+          <span className="text-xl tracking-widest">{Math.floor(timeLeft / 3600).toString().padStart(2, '0')}:{(Math.floor((timeLeft % 3600) / 60)).toString().padStart(2, '0')}:{(timeLeft % 60).toString().padStart(2, '0')}</span>
+        </div>
+      )}
 
-      <header className="mb-10 text-center relative w-full max-w-md mt-4">
+      <header className={`mb-10 text-center relative w-full max-w-md ${timeLeft !== null || globalTimeLeft !== null ? 'mt-14' : 'mt-4'}`}>
         <h1 className="text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
           PASHATOKU.COM
         </h1>
         <p className="text-slate-400 text-sm mt-2">Interactive Quiz System</p>
+        
+        {isRegistered && (
+          <div className="mt-6 flex justify-center space-x-4">
+            <button onClick={() => setViewMode('quiz')} className={`px-6 py-2 rounded-xl font-black text-sm transition-all ${viewMode === 'quiz' ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>クイズ</button>
+            <button onClick={() => { setViewMode('history'); fetchHistory(); }} className={`px-6 py-2 rounded-xl font-black text-sm transition-all ${viewMode === 'history' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>履歴・結果</button>
+          </div>
+        )}
       </header>
 
-      {!isRegistered ? (
+      {isGlobalEnded ? (
+         <div className="w-full max-w-md text-center animate-in zoom-in duration-500 mt-10">
+           <div className="bg-red-900/40 p-10 rounded-3xl shadow-2xl border border-red-500/50">
+             <div className="text-6xl mb-6 inline-block">🛑</div>
+             <h2 className="text-3xl font-black mb-4 text-red-400">サービス終了</h2>
+             <p className="text-red-200 font-bold mb-6">全イベントの制限時間が終了しました。</p>
+             <button onClick={() => { setViewMode('history'); setIsGlobalEnded(false); fetchHistory(); }} className="w-full bg-red-700 text-white px-8 py-4 rounded-xl font-black hover:bg-red-600 transition-all shadow-lg border border-red-500">履歴・結果を見る</button>
+           </div>
+         </div>
+      ) : viewMode === 'history' && isRegistered ? (
+         <div className="w-full max-w-2xl animate-in slide-in-from-bottom-4 duration-500">
+           <h2 className="text-2xl font-black mb-6 text-emerald-400 text-center">参加履歴・結果</h2>
+           {historyData.length === 0 ? (
+             <p className="text-slate-400 text-center py-8">まだ参加したイベントがありません。</p>
+           ) : historyData.map(h => (
+             <div key={h.quiz_id} className="bg-slate-800 p-6 rounded-2xl mb-4 border border-slate-700 shadow-xl">
+                <div className="flex justify-between items-center mb-2">
+                   <h3 className="font-bold text-lg text-blue-300">{h.title}</h3>
+                   {h.play_status === 'ended' ? <span className="bg-slate-700 text-slate-300 text-xs px-2 py-1 rounded">終了済</span> : <span className="bg-emerald-900 text-emerald-300 text-xs px-2 py-1 rounded">開催中</span>}
+                </div>
+                <p className="text-sm text-slate-400 mb-4">合計スコア: <span className="text-xl font-black text-white">{h.total_score || 0}</span> pt</p>
+                {h.play_status === 'ended' && (
+                  <p className="text-xs text-slate-500">※イベントが終了したため、詳細な結果はこのイベントに参加した人のみ閲覧可能です。(今後のアップデートで詳細表示機能が追加される予定です)</p>
+                )}
+             </div>
+           ))}
+         </div>
+      ) : !isRegistered ? (
         // --- 登録フォーム ---
         <form onSubmit={handleRegister} className="w-full max-w-md bg-slate-800 p-8 rounded-3xl shadow-2xl border border-slate-700">
           <h2 className="text-xl font-bold mb-6 text-center">参加者エントリー</h2>
@@ -428,6 +535,13 @@ function App() {
                 {gpsError && gpsError.includes('失敗') === false && (
                    <button onClick={() => { setGpsVerified(false); setGpsError('再検証中...'); verifyGps(quizData.questions[currentQIndex].lat, quizData.questions[currentQIndex].lng, quizData.questions[currentQIndex].radius || 50).then(()=>setGpsVerified(true)).catch(e=>setGpsError(e)) }} className="bg-blue-600 px-6 py-2 rounded-xl font-bold text-white">再試行</button>
                 )}
+             </div>
+          ) : quizData.questions[currentQIndex] && answeredQuestionIds.some(id => String(id) === String(quizData.questions[currentQIndex].id)) && !showAnswer ? (
+             <div className="bg-slate-800 p-10 rounded-3xl shadow-2xl border border-slate-700 text-center animate-in zoom-in">
+                <div className="text-5xl mb-6 inline-block">🔒</div>
+                <h2 className="text-2xl font-black mb-4 text-emerald-400">回答済みです</h2>
+                <p className="text-slate-400 font-bold mb-6">この問題はすでに回答しています。</p>
+                <button onClick={() => { setQuizData(null); setQuizCode(null); }} className="w-full bg-slate-700 text-white px-8 py-4 rounded-xl font-black hover:bg-slate-600 transition-all shadow-lg border border-slate-600">スキャン画面に戻る</button>
              </div>
           ) : (
             <>

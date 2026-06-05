@@ -15,9 +15,33 @@ function AdminDashboard() {
   const [sortField, setSortField] = useState('total_score');
   const [sortOrder, setSortOrder] = useState('desc'); // 'asc' or 'desc'
 
+  const [globalTimerEndAt, setGlobalTimerEndAt] = useState(null);
+  const [globalTimerDays, setGlobalTimerDays] = useState(0);
+  const [globalTimerHours, setGlobalTimerHours] = useState(0);
+  const [globalTimerMinutes, setGlobalTimerMinutes] = useState(0);
+  const [globalTimerSeconds, setGlobalTimerSeconds] = useState(0);
+  
+  const fetchGlobalTimer = async () => {
+    try {
+      const res = await axios.get(`http://${window.location.hostname}:8080/api/global_timer`);
+      setGlobalTimerEndAt(res.data.end_at);
+    } catch (e) { console.error(e); }
+  };
+  
+  const updateGlobalTimer = async (sec) => {
+    try {
+      const adminPass = import.meta.env.VITE_ADMIN_PASSWORD || '80558055';
+      await axios.post(`http://${window.location.hostname}:8080/api/admin/global_timer`, { duration_sec: sec }, {
+        headers: { Authorization: `Bearer ${adminPass}` }
+      });
+      fetchGlobalTimer();
+    } catch (e) { console.error(e); }
+  };
+
   useEffect(() => {
     if (isAuthenticated) {
       fetchQuizzes();
+      fetchGlobalTimer();
     }
     const int = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(int);
@@ -25,7 +49,7 @@ function AdminDashboard() {
 
   const fetchQuizzes = async () => {
     try {
-      const res = await axios.get('http://localhost:8080/api/admin/quizzes');
+      const res = await axios.get(`http://${window.location.hostname}:8080/api/admin/quizzes`);
       setQuizzes(res.data || []);
     } catch (err) {
       console.error(err);
@@ -45,7 +69,7 @@ function AdminDashboard() {
 
   const updateQuizStatus = async (id, field, value) => {
     try {
-      await axios.patch(`http://localhost:8080/api/admin/quizzes/${id}/status`, { [field]: value });
+      await axios.patch(`http://${window.location.hostname}:8080/api/admin/quizzes/${id}/status`, { [field]: value });
       fetchQuizzes();
     } catch (err) {
       console.error("Failed to update status", err);
@@ -56,7 +80,7 @@ function AdminDashboard() {
     setSelectedQuiz(quiz);
     setLoading(true);
     try {
-      const res = await axios.get(`http://localhost:8080/api/admin/quizzes/${quiz.id}/results`);
+      const res = await axios.get(`http://${window.location.hostname}:8080/api/admin/quizzes/${quiz.id}/results`);
       setResults(res.data || []);
     } catch (err) {
       console.error("Failed to fetch results", err);
@@ -122,6 +146,32 @@ function AdminDashboard() {
             <a href="/admin/create" className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl font-bold transition-all text-sm shadow-lg whitespace-nowrap">
               + 新規作成
             </a>
+          </div>
+
+          <div className="bg-red-900/20 rounded-3xl p-6 border border-red-500/30 shadow-xl mb-6">
+            <h2 className="text-xl font-black text-red-400 mb-4">🌍 サービス全体強制タイマー</h2>
+            <p className="text-slate-400 text-sm mb-4">設定した時間がゼロになると、全参加者の画面が強制終了画面に切り替わります。</p>
+            {globalTimerEndAt && (
+              <div className="bg-slate-900 p-4 rounded-xl border border-red-500 mb-4 text-center">
+                <p className="text-slate-300 text-sm mb-1">現在の残り時間</p>
+                <div className="text-3xl font-black text-red-400">
+                  {(() => {
+                     const end = new Date(globalTimerEndAt);
+                     const diff = Math.floor((end - now) / 1000);
+                     if (diff <= 0) return "終了しました";
+                     return `${Math.floor(diff/86400)}日 ${Math.floor((diff%86400)/3600).toString().padStart(2, '0')}:${Math.floor((diff%3600)/60).toString().padStart(2, '0')}:${(diff%60).toString().padStart(2, '0')}`;
+                  })()}
+                </div>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2 items-end">
+              <div><label className="block text-xs text-slate-500 mb-1">日</label><input type="number" min="0" value={globalTimerDays} onChange={e=>setGlobalTimerDays(parseInt(e.target.value)||0)} className="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white outline-none" /></div>
+              <div><label className="block text-xs text-slate-500 mb-1">時間</label><input type="number" min="0" value={globalTimerHours} onChange={e=>setGlobalTimerHours(parseInt(e.target.value)||0)} className="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white outline-none" /></div>
+              <div><label className="block text-xs text-slate-500 mb-1">分</label><input type="number" min="0" value={globalTimerMinutes} onChange={e=>setGlobalTimerMinutes(parseInt(e.target.value)||0)} className="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white outline-none" /></div>
+              <div><label className="block text-xs text-slate-500 mb-1">秒</label><input type="number" min="0" value={globalTimerSeconds} onChange={e=>setGlobalTimerSeconds(parseInt(e.target.value)||0)} className="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white outline-none" /></div>
+              <button onClick={() => updateGlobalTimer(globalTimerDays*86400 + globalTimerHours*3600 + globalTimerMinutes*60 + globalTimerSeconds)} className="ml-2 bg-red-600 hover:bg-red-500 text-white px-4 py-1.5 rounded font-bold shadow-lg transition-all">開始/更新</button>
+              <button onClick={() => updateGlobalTimer(0)} className="ml-2 bg-slate-700 hover:bg-slate-600 text-slate-300 px-4 py-1.5 rounded font-bold transition-all">停止/クリア</button>
+            </div>
           </div>
 
           <div className="bg-slate-800 rounded-3xl border border-slate-700 shadow-xl overflow-hidden">
