@@ -4,6 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -13,7 +17,10 @@ import (
 	"unicode"
 
 	_ "github.com/lib/pq"
+	"github.com/makiuchi-d/gozxing"
+	"github.com/makiuchi-d/gozxing/qrcode"
 	"github.com/rs/cors"
+	"golang.org/x/image/draw"
 )
 
 type App struct {
@@ -89,6 +96,11 @@ func createTables(app *App) {
 		id SERIAL PRIMARY KEY,
 		name VARCHAR(16) NOT NULL,
 		student_id TEXT NOT NULL
+	);
+	CREATE TABLE IF NOT EXISTS external_scans (
+	    user_id INTEGER PRIMARY KEY,
+	    code TEXT NOT NULL,
+	    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);`
 	if _, err := app.UserDB.Exec(userSchema); err != nil {
 		log.Fatal("Failed to create User table:", err)
@@ -912,8 +924,11 @@ func main() {
 			app.userHistoryHandler(w, r)
 		} else if strings.HasSuffix(r.URL.Path, "/answered") {
 			app.userAnsweredHandler(w, r)
+		} else if strings.HasSuffix(r.URL.Path, "/external_scan") {
+			app.externalScanHandler(w, r)
 		}
 	})
+	mux.HandleFunc("/api/qr/receive", app.qrReceiveHandler)
 	mux.HandleFunc("/api/quizzes", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			app.createQuizHandler(w, r)
@@ -1044,4 +1059,125 @@ func (app *App) adminGlobalTimerHandler(w http.ResponseWriter, r *http.Request) 
 	
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func (app *App) qrReceiveHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	name := r.Header.Get("X-User-Name")
+	studentID := r.Header.Get("X-Student-Id")
+
+	if name == "" || studentID == "" {
+		http.Error(w, "Missing credentials", http.StatusUnauthorized)
+		return
+	}
+
+	var userID int
+	err := app.UserDB.QueryRow("SELECT id FROM users WHERE name = $1 AND student_id = $2", name, studentID).Scan(&userID)
+	if err != nil {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	contentType := r.Header.Get("Content-Type")
+	var code string
+
+	if strings.Contains(contentType, "multipart/form-data") || strings.HasPrefix(contentType, "image/") {
+		// Image processing
+		var file io.Reader
+		if strings.Contains(contentType, "multipart/form-data") {
+			err := r.ParseMultipartForm(10 << 20)
+			if err != nil {
+				http.Error(w, "Invalid multipart data", http.StatusBadRequest)
+				return
+			}
+			f, _, err := r.FormFile("image")
+			if err != nil {
+				http.Error(w, "Invalid image data", http.StatusBadRequest)
+				return
+			}
+			defer f.Close()
+			file = f
+		} else {
+			file = r.Body
+		}
+
+		img, _, err := image.Decode(file)
+		if err != nil {
+			http.Error(w, "Failed to decode image", http.StatusBadRequest)
+			return
+		}
+
+		bounds := img.Bounds()
+		if bounds.Dx() > 1920 || bounds.Dy() > 1200 {
+			var newWidth, newHeight int
+			if float64(bounds.Dx())/1920.0 > float64(bounds.Dy())/1200.0 {
+				newWidth = 1920
+				newHeight = int(float64(bounds.Dy()) * (1920.0 / float64(bounds.Dx())))
+			} else {
+				newHeight = 1200
+				newWidth = int(float64(bounds.Dx()) * (1200.0 / float64(bounds.Dy())))
+			}
+			resized := image.NewRGBA(image.Rect(0, 0, newWidth, newHeight))
+			draw.CatmullRom.Scale(resized, resized.Bounds(), img, bounds, draw.Over, nil)
+			img = resized
+		}
+
+		bmp, _ := gozxing.NewBinaryBitmapFromImage(img)
+		qrReader := qrcode.NewQRCodeReader()
+		result, err := qrReader.Decode(bmp, nil)
+		if err != nil {
+			http.Error(w, "No QR code found", http.StatusBadRequest)
+			return
+		}
+		code = result.GetText()
+	} else {
+		// Assume text payload
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			return
+		}
+		code = string(b)
+	}
+
+	if code == "" {
+		http.Error(w, "Empty code", http.StatusBadRequest)
+		return
+	}
+
+	app.UserDB.Exec(`
+		INSERT INTO external_scans (user_id, code) 
+		VALUES ($1, $2)
+		ON CONFLICT (user_id) DO UPDATE SET code = EXCLUDED.code, created_at = CURRENT_TIMESTAMP
+	`, userID, code)
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "code": code})
+}
+
+func (app *App) externalScanHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+	userID := parts[3]
+
+	var code string
+	err := app.UserDB.QueryRow("DELETE FROM external_scans WHERE user_id = $1 RETURNING code", userID).Scan(&code)
+	if err == nil && code != "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"code": code})
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{})
 }

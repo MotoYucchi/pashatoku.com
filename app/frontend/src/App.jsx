@@ -170,6 +170,30 @@ function App() {
     }
   }, [isRegistered, quizCode, quizData]);
 
+  // External Scan Polling
+  useEffect(() => {
+    let interval;
+    if (isRegistered && !quizCode && !quizData) {
+      interval = setInterval(async () => {
+        try {
+          const res = await axios.get(`http://${window.location.hostname}:8080/api/user/${userId}/external_scan`);
+          if (res.data && res.data.code) {
+            let code = res.data.code;
+            try {
+              const url = new URL(code);
+              const params = new URLSearchParams(url.search);
+              if (params.has('code')) code = params.get('code');
+            } catch(e) {}
+            setQuizCode(code);
+          }
+        } catch (e) {}
+      }, 3000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    }
+  }, [isRegistered, quizCode, quizData, userId]);
+
   // ポーリング処理 (ステータス同期)
   useEffect(() => {
     let interval;
@@ -361,13 +385,13 @@ function App() {
         </div>
       )}
       {quizData && quizData.timer_end_at && quizData.play_status === 'started' && timeLeft !== null && (
-        <div className="fixed top-0 left-0 w-full bg-red-600/90 backdrop-blur-md text-white text-center py-2 font-black z-50 shadow-lg flex justify-center items-center gap-3">
+        <div className={`fixed left-0 w-full bg-red-600/90 backdrop-blur-md text-white text-center py-2 font-black shadow-lg flex justify-center items-center gap-3 ${globalTimeLeft !== null && !isGlobalEnded ? 'top-10 z-40' : 'top-0 z-50'}`}>
           <span>⏳ イベント終了まで</span>
           <span className="text-xl tracking-widest">{Math.floor(timeLeft / 3600).toString().padStart(2, '0')}:{(Math.floor((timeLeft % 3600) / 60)).toString().padStart(2, '0')}:{(timeLeft % 60).toString().padStart(2, '0')}</span>
         </div>
       )}
 
-      <header className={`mb-10 text-center relative w-full max-w-md ${timeLeft !== null || globalTimeLeft !== null ? 'mt-14' : 'mt-4'}`}>
+      <header className={`mb-10 text-center relative w-full max-w-md ${(timeLeft !== null && globalTimeLeft !== null && !isGlobalEnded) ? 'mt-24' : (timeLeft !== null || (globalTimeLeft !== null && !isGlobalEnded) ? 'mt-14' : 'mt-4')}`}>
         <h1 className="text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
           PASHATOKU.COM
         </h1>
