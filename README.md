@@ -1,8 +1,7 @@
 # 🚧 Currently under development
-> **⚠️ WARNING: Under Active Development / Not Functional**
-> 現在開発中です。まだまともに動作する状態ではありません。
-> 予告なくコードの完全なリセットが行われる可能性があります。
-
+> **🚧 Status: Active Development (Functional)**
+> 現在も活発に開発中です。動作する状態にはなりました。
+> 今後のアップデートにより仕様やAPIが予告なく変更される可能性があります。
 
 # 📸 Pashatoku
 
