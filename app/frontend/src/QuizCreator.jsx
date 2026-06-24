@@ -36,6 +36,7 @@ function QuizCreator() {
   ]);
   
   const [createdCode, setCreatedCode] = useState(null);
+  const [createdQuiz, setCreatedQuiz] = useState(null);
   const [error, setError] = useState('');
 
   const urlParams = new URLSearchParams(window.location.search);
@@ -185,11 +186,13 @@ function QuizCreator() {
       }
 
       if (isEditMode) {
-        await axios.put(`http://localhost:8080/api/admin/quizzes/${editId}`, payload);
-        setCreatedCode(payload.code || editCode);
+        const res = await axios.put(`http://localhost:8080/api/admin/quizzes/${editId}`, payload);
+        setCreatedCode(res.data.code);
+        setCreatedQuiz(res.data);
       } else {
         const res = await axios.post('http://localhost:8080/api/quizzes', payload);
         setCreatedCode(res.data.code);
+        setCreatedQuiz(res.data);
       }
     } catch (err) {
       console.error(err);
@@ -227,22 +230,67 @@ function QuizCreator() {
 
   if (createdCode) {
     const quizUrl = `${window.location.origin}/?code=${createdCode}`;
+    const isSpotMode = createdQuiz && createdQuiz.mode === 'spot';
+
     return (
-      <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6 font-sans">
-        <div className="bg-slate-800 p-10 rounded-3xl shadow-2xl text-center max-w-md w-full border border-slate-700">
+      <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6 font-sans print:bg-white print:text-black print:p-0">
+        <div className="bg-slate-800 p-10 rounded-3xl shadow-2xl text-center max-w-md w-full border border-slate-700 print:hidden">
           <h2 className="text-3xl font-black mb-4 text-emerald-400">作成完了！</h2>
-          <div className="bg-white p-6 rounded-2xl inline-block mb-6 shadow-lg">
-            <QRCodeSVG value={quizUrl} size={200} />
-          </div>
-          <div className="mb-8 bg-slate-900 p-4 rounded-xl border border-slate-700">
-            <p className="text-xs text-slate-400 mb-1 font-bold">クイズコード</p>
-            <p className="text-2xl font-black tracking-widest text-emerald-400">{createdCode}</p>
-          </div>
+          
+          {!isSpotMode ? (
+            <>
+              <div className="bg-white p-6 rounded-2xl inline-block mb-6 shadow-lg">
+                <QRCodeSVG value={quizUrl} size={200} />
+              </div>
+              <div className="mb-8 bg-slate-900 p-4 rounded-xl border border-slate-700">
+                <p className="text-xs text-slate-400 mb-1 font-bold">クイズコード</p>
+                <p className="text-2xl font-black tracking-widest text-emerald-400">{createdCode}</p>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-slate-400 mb-4 font-bold">スポット専用問題コード（パシャトクモード）</p>
+              <div className="max-h-64 overflow-y-auto mb-6 bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-4">
+                {createdQuiz.questions.map((q, idx) => (
+                  <div key={q.id || idx} className="bg-slate-800 p-4 rounded-lg flex items-center justify-between border border-slate-600 text-left">
+                    <div>
+                      <p className="text-xs text-slate-400 font-bold mb-1">Q{idx + 1}: {q.text.substring(0, 15)}...</p>
+                      <p className="text-xl font-black tracking-widest text-emerald-400">{q.code}</p>
+                    </div>
+                    <div className="bg-white p-2 rounded">
+                      <QRCodeSVG value={`${window.location.origin}/?code=${q.code}`} size={60} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => window.print()} className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-500 transition-all mb-4 flex items-center justify-center gap-2">
+                🖨️ QRコードを印刷
+              </button>
+            </>
+          )}
+
           <div className="flex gap-4">
              <button onClick={() => window.location.reload()} className="flex-1 bg-emerald-600 text-white py-4 rounded-xl font-bold hover:bg-emerald-500 transition-all">続けて作成</button>
              <a href="/admin" className="flex-1 bg-slate-700 text-white py-4 rounded-xl font-bold hover:bg-slate-600 transition-all flex items-center justify-center">ダッシュボードへ戻る</a>
           </div>
         </div>
+
+        {/* 印刷用UI */}
+        {isSpotMode && (
+          <div className="hidden print:block w-full">
+            {createdQuiz.questions.map((q, idx) => (
+              <div key={`print-${q.id || idx}`} className="break-after-page flex flex-col items-center justify-center min-h-screen w-full bg-white text-black p-10 print:h-screen">
+                <h1 className="text-6xl font-black mb-10 text-center">{createdQuiz.title}</h1>
+                <h2 className="text-4xl font-bold mb-16 text-center">Q{idx + 1}: {q.text}</h2>
+                <QRCodeSVG value={`${window.location.origin}/?code=${q.code}`} size={500} />
+                <p className="text-4xl font-black tracking-widest mt-16 font-mono bg-gray-100 px-8 py-4 rounded-2xl border-4 border-gray-300">
+                  {q.code}
+                </p>
+                <p className="text-2xl mt-12 text-gray-500 font-bold">PASHATOKU.COM</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }

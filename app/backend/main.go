@@ -890,6 +890,8 @@ func (app *App) adminUpdateQuizHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to insert question", http.StatusInternalServerError)
 			return
 		}
+		q.Questions[i].QuizID = quizID
+		q.Questions[i].Code = qCode
 	}
 
 	if err := tx.Commit(); err != nil {
