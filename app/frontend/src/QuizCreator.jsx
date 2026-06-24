@@ -37,6 +37,7 @@ function QuizCreator() {
   
   const [createdCode, setCreatedCode] = useState(null);
   const [createdQuiz, setCreatedQuiz] = useState(null);
+  const [printStyle, setPrintStyle] = useState('detailed');
   const [error, setError] = useState('');
 
   const urlParams = new URLSearchParams(window.location.search);
@@ -46,7 +47,7 @@ function QuizCreator() {
 
   useEffect(() => {
     if (isAuthenticated && isEditMode) {
-      axios.get(`http://localhost:8080/api/admin/quizzes/${editId}`)
+      axios.get(`http://${window.location.hostname}:8080/api/admin/quizzes/${editId}`)
         .then(res => {
           const qz = res.data;
           setTitle(qz.title);
@@ -97,6 +98,86 @@ function QuizCreator() {
     }]);
   };
 
+  const handleCsvUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target.result;
+      const lines = text.split('\n').filter(line => line.trim() !== '');
+      
+      const newQuestions = [];
+      let startIndex = 0;
+      if (lines[0] && lines[0].startsWith('作者')) {
+        startIndex = 1;
+      }
+
+      for (let i = startIndex; i < lines.length; i++) {
+        let ret = [];
+        let state = 0;
+        let value = "";
+        const line = lines[i];
+        for (let j = 0; j < line.length; j++) {
+          let ch = line[j];
+          if (state === 0) {
+            if (ch === '"') {
+              state = 1;
+            } else if (ch === ',') {
+              ret.push(value);
+              value = "";
+            } else {
+              value += ch;
+            }
+          } else if (state === 1) {
+            if (ch === '"') {
+              if (j + 1 < line.length && line[j+1] === '"') {
+                value += '"';
+                j++;
+              } else {
+                state = 0;
+              }
+            } else {
+              value += ch;
+            }
+          }
+        }
+        ret.push(value);
+
+        if (ret.length < 8) continue;
+
+        const [, qText, opt1, opt2, opt3, opt4, correctNum, pointsStr, explanationStr] = ret;
+        
+        const options = [opt1 || '', opt2 || '', opt3 || '', opt4 || ''];
+        const correct_index = Math.max(0, parseInt(correctNum, 10) - 1);
+        const points = parseInt(pointsStr, 10) || 1;
+        const explanation = explanationStr || '';
+
+        newQuestions.push({
+          code: '',
+          text: qText || '',
+          options: options,
+          correct_index: correct_index,
+          points: points,
+          question_type: 'radio',
+          media_url: '',
+          hint: '',
+          penalty_points: 0,
+          explanation: explanation,
+          lat: '',
+          lng: '',
+          radius: 50
+        });
+      }
+
+      if (newQuestions.length > 0) {
+        setQuestions(prev => [...prev, ...newQuestions]);
+        e.target.value = null;
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const updateQuestion = (index, field, value) => {
     const newQuestions = [...questions];
     newQuestions[index][field] = value;
@@ -123,6 +204,13 @@ function QuizCreator() {
     }
     updateQuestion(index, 'code', code);
   }
+
+  const handlePrint = (style) => {
+    setPrintStyle(style);
+    setTimeout(() => {
+      window.print();
+    }, 100);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -186,11 +274,11 @@ function QuizCreator() {
       }
 
       if (isEditMode) {
-        const res = await axios.put(`http://localhost:8080/api/admin/quizzes/${editId}`, payload);
+        const res = await axios.put(`http://${window.location.hostname}:8080/api/admin/quizzes/${editId}`, payload);
         setCreatedCode(res.data.code);
         setCreatedQuiz(res.data);
       } else {
-        const res = await axios.post('http://localhost:8080/api/quizzes', payload);
+        const res = await axios.post(`http://${window.location.hostname}:8080/api/quizzes`, payload);
         setCreatedCode(res.data.code);
         setCreatedQuiz(res.data);
       }
@@ -263,9 +351,14 @@ function QuizCreator() {
                   </div>
                 ))}
               </div>
-              <button onClick={() => window.print()} className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-500 transition-all mb-4 flex items-center justify-center gap-2">
-                🖨️ QRコードを印刷
-              </button>
+              <div className="flex gap-4 mb-4">
+                <button onClick={() => handlePrint('detailed')} className="flex-1 bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-500 transition-all flex items-center justify-center gap-2">
+                  🖨️ 印刷 (詳細)
+                </button>
+                <button onClick={() => handlePrint('simple')} className="flex-1 bg-sky-600 text-white py-4 rounded-xl font-bold hover:bg-sky-500 transition-all flex items-center justify-center gap-2">
+                  🖨️ 印刷 (QRのみ)
+                </button>
+              </div>
             </>
           )}
 
@@ -276,7 +369,7 @@ function QuizCreator() {
         </div>
 
         {/* 印刷用UI */}
-        {isSpotMode && (
+        {isSpotMode && printStyle === 'detailed' && (
           <div className="hidden print:block w-full">
             {createdQuiz.questions.map((q, idx) => (
               <div key={`print-${q.id || idx}`} className="break-after-page flex flex-col items-center justify-center min-h-screen w-full bg-white text-black p-10 print:h-screen">
@@ -287,6 +380,16 @@ function QuizCreator() {
                   {q.code}
                 </p>
                 <p className="text-2xl mt-12 text-gray-500 font-bold">PASHATOKU.COM</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {isSpotMode && printStyle === 'simple' && (
+          <div className="hidden print:block w-full">
+            {createdQuiz.questions.map((q, idx) => (
+              <div key={`print-${q.id || idx}`} className="break-after-page flex flex-col items-center justify-center min-h-screen w-full bg-white text-black p-10 print:h-screen">
+                <QRCodeSVG value={`${window.location.origin}/?code=${q.code}`} size={650} />
               </div>
             ))}
           </div>
@@ -479,9 +582,17 @@ function QuizCreator() {
             ))}
           </div>
 
-          <button type="button" onClick={addQuestion} className="w-full border-2 border-dashed border-slate-600 bg-slate-800/50 text-slate-300 hover:text-white hover:border-purple-500 hover:bg-slate-800 py-6 rounded-3xl font-black text-lg transition-all shadow-inner">
-            + 新しい問題を追加する
-          </button>
+          <div className="flex justify-between gap-4">
+            <button type="button" onClick={addQuestion} className="w-[48%] border-2 border-dashed border-slate-600 bg-slate-800/50 text-slate-300 hover:text-white hover:border-purple-500 hover:bg-slate-800 py-6 rounded-3xl font-black text-lg transition-all shadow-inner">
+              + 新しい問題を追加する
+            </button>
+            <div className="w-[48%] relative">
+              <input type="file" accept=".csv" onChange={handleCsvUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+              <button type="button" className="w-full h-full border-2 border-dashed border-slate-600 bg-slate-800/50 text-slate-300 hover:text-white hover:border-blue-500 hover:bg-slate-800 py-6 rounded-3xl font-black text-lg transition-all shadow-inner flex items-center justify-center gap-2">
+                📄 csvファイルから問題を追加する
+              </button>
+            </div>
+          </div>
 
           {error && <p className="text-red-400 text-center font-bold bg-red-900/20 py-4 rounded-xl">{error}</p>}
 

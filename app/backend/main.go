@@ -12,6 +12,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -890,7 +891,8 @@ func (app *App) adminUpdateQuizHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to insert question", http.StatusInternalServerError)
 			return
 		}
-		q.Questions[i].QuizID = quizID
+		quizIDInt, _ := strconv.Atoi(quizID)
+		q.Questions[i].QuizID = quizIDInt
 		q.Questions[i].Code = qCode
 	}
 
