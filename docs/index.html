@@ -103,6 +103,7 @@
     <div class="nav-links">
       <a href="#about" data-i18n="nav_about">About</a>
       <a href="#howto" data-i18n="nav_howto">How To</a>
+      <a href="#api" data-i18n="nav_api">API</a>
       <a href="#help" data-i18n="nav_help">Help</a>
     </div>
     <select id="languageSelect" class="lang-select" onchange="changeLanguage(this.value)">
@@ -178,6 +179,46 @@
       </div>
     </section>
 
+    <section id="api">
+      <h2 data-i18n="api_title">API Usage Guide (External Integration)</h2>
+      <p data-i18n="api_desc" style="margin-bottom: 2rem; color: var(--color-slate-400);">Pashatoku provides an API to submit QR codes from external devices like drones or custom scripts.</p>
+      
+      <div class="howto-grid" style="grid-template-columns: 1fr;">
+        <div class="howto-card">
+          <h3 data-i18n="api_endpoint">1. API Endpoint</h3>
+          <p style="margin-top: 1rem;"><code style="background: var(--color-slate-900); padding: 0.5rem; border-radius: 0.5rem; color: var(--color-sky-400); font-weight: bold;">POST http://&lt;your-server-ip&gt;:8080/api/qr/receive</code></p>
+        </div>
+        <div class="howto-card">
+          <h3 data-i18n="api_headers">2. Required Headers</h3>
+          <ul style="margin-top: 1rem; margin-left: 1.5rem; line-height: 1.8;">
+            <li><code>X-User-Name</code>: The participant's registered name.</li>
+            <li><code>X-Student-Id</code>: The participant's student ID or employee ID.</li>
+            <li><code>Content-Type</code>: <code>text/plain</code></li>
+          </ul>
+        </div>
+        <div class="howto-card">
+          <h3 data-i18n="api_body">3. Request Body</h3>
+          <p style="margin-top: 1rem;">Send the scanned QR code content directly as raw text.</p>
+        </div>
+        <div class="howto-card">
+          <h3 data-i18n="api_example">4. Example (Python)</h3>
+          <pre style="margin-top: 1rem; background: var(--color-slate-900); color: var(--color-slate-300); padding: 1.5rem; border-radius: 1rem; overflow-x: auto; font-family: monospace; line-height: 1.5;"><code>import requests
+
+url = "http://localhost:8080/api/qr/receive"
+headers = {
+    "X-User-Name": "MotoYucchi",
+    "X-Student-Id": "12345",
+    "Content-Type": "text/plain"
+}
+
+data = "https://pashatoku.com/?code=KyLUw"
+res = requests.post(url, headers=headers, data=data)
+
+print(res.status_code, res.text)</code></pre>
+        </div>
+      </div>
+    </section>
+
     <section id="help">
       <h2 data-i18n="help_title">Help & Troubleshooting</h2>
       
@@ -249,7 +290,14 @@
         help_q3: "Q. I answered a question but it says 'Event Closed'.",
         help_a3: "A. The organizer has manually closed the event, or the global timer has expired. Answers can no longer be submitted.",
         help_q4: "Q. Can I use Pashatoku as a cloud service?",
-        help_a4: "A. No, Pashatoku is self-hosted software. You must deploy it on your own server or local network."
+        help_a4: "A. No, Pashatoku is self-hosted software. You must deploy it on your own server or local network.",
+        nav_api: "API",
+        api_title: "API Usage Guide (External Integration)",
+        api_desc: "Pashatoku provides an API to submit QR codes from external devices like drones or custom scripts. If a user is answering a question, the screen update will be paused until they return to the scanner.",
+        api_endpoint: "1. API Endpoint",
+        api_headers: "2. Required Headers",
+        api_body: "3. Request Body",
+        api_example: "4. Example Request (Python)"
       },
       ja: {
         nav_about: "概要",
@@ -291,7 +339,14 @@
         help_q3: "Q. 回答しようとしたら「イベントは終了しました」と表示されます。",
         help_a3: "A. 開催者がイベントを終了させたか、全体タイマーの時間がゼロになったため、新規の回答受付が締め切られました。",
         help_q4: "Q. Pashatokuのクラウド版サービスはありますか？",
-        help_a4: "A. いいえ、Pashatokuはセルフホスト型のソフトウェアです。ご自身のサーバーやローカルネットワーク上に構築してご利用ください。"
+        help_a4: "A. いいえ、Pashatokuはセルフホスト型のソフトウェアです。ご自身のサーバーやローカルネットワーク上に構築してご利用ください。",
+        nav_api: "API連携",
+        api_title: "外部連携APIの利用方法",
+        api_desc: "ドローンやPythonスクリプトなどの外部プログラムから、読み取ったQRコードを参加者の画面へ直接送信（プッシュ）できます。参加者が回答中の場合は画面遷移せず、元の画面に戻った瞬間に同期される安全な仕様です。",
+        api_endpoint: "1. APIエンドポイント",
+        api_headers: "2. 必須ヘッダー",
+        api_body: "3. ボディ（データ内容）",
+        api_example: "4. Pythonでのリクエスト例"
       }
     };
 
